@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>ARマーカー 印刷ページ</title>
+  <style>
+    @media screen {
+      body {
+        font-family: system-ui, sans-serif;
+        background: #f5f5f0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        padding: 2rem;
+        color: #1a1a1a;
+      }
+      .card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 2px 24px rgba(0,0,0,0.1);
+        padding: 2.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        max-width: 420px;
+        width: 100%;
+      }
+      h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.35rem; letter-spacing: -0.02em; }
+      .sub { font-size: 0.875rem; color: #666; margin-bottom: 1.75rem; text-align: center; line-height: 1.6; }
+      .marker-wrap {
+        border: 4px solid #111;
+        padding: 12px;
+        background: white;
+        margin-bottom: 1.25rem;
+      }
+      .marker-wrap img {
+        width: 200px;
+        height: 200px;
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+      .size-note {
+        font-size: 0.82rem;
+        color: #777;
+        margin-bottom: 1.5rem;
+        text-align: center;
+      }
+      .tips {
+        background: #f8f8f6;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        font-size: 0.82rem;
+        color: #555;
+        line-height: 1.7;
+        width: 100%;
+        margin-bottom: 1.5rem;
+      }
+      .tips strong { color: #1a1a1a; display: block; margin-bottom: 0.25rem; }
+      .btn-print {
+        padding: 0.75rem 2rem;
+        background: #5c6ef5;
+        border: none;
+        border-radius: 10px;
+        color: white;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+        font-family: inherit;
+      }
+      .btn-print:hover { background: #6e7ef7; }
+      .btn-back {
+        margin-top: 0.75rem;
+        padding: 0.5rem 1rem;
+        background: transparent;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        color: #555;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .btn-back:hover { background: #f0f0ec; }
+    }
+
+    @media print {
+      body { margin: 0; padding: 0; background: white; }
+      .card { box-shadow: none; border-radius: 0; padding: 2cm; }
+      .btn-print, .btn-back, .tips { display: none; }
+      h1 { font-size: 1.2rem; }
+      .marker-wrap img { width: 8cm; height: 8cm; }
+      .marker-wrap { border: 4px solid black; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>ARマーカー — Hiro</h1>
+    <p class="sub">このページを印刷してARビデオプレイヤーで使用します</p>
+
+    <div class="marker-wrap">
+      <img
+        src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.5/data/images/hiro.png"
+        alt="Hiro AR Marker"
+        crossorigin="anonymous"
+      >
+    </div>
+
+    <p class="size-note">推奨印刷サイズ: <strong>10cm × 10cm</strong> 以上</p>
+
+    <div class="tips">
+      <strong>印刷・使用上のヒント</strong>
+      ・光沢のある用紙より普通紙推奨<br>
+      ・マーカー周辺に十分な白い余白を確保<br>
+      ・シワや折れ曲がりのない平らな状態で使用<br>
+      ・マーカーをカメラから 20〜60cm の距離で使用
+    </div>
+
+    <button class="btn-print" onclick="window.print()">🖨 このページを印刷する</button>
+    <button class="btn-back" onclick="history.back()">← 戻る</button>
+  </div>
+</body>
+</html>
