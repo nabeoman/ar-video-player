@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>AR Video Player</title>
 
-  <!-- iOS: video要素にplaysinline/muted/autoplayを付与 -->
+  <!-- AR.jsより前に実行: iOS video属性付与 + dpdb.json抑止 + MindARターゲット配信 -->
   <script>
+    // iOS: video要素にplaysinline/muted/autoplay付与
     (function() {
       var _orig = document.createElement.bind(document);
       document.createElement = function(tag) {
@@ -19,6 +20,50 @@
           el.muted = true;
         }
         return el;
+      };
+    })();
+
+    // fetch interceptor:
+    //   - dpdb.json (A-Frame VRデバイスDB) → 空データを返してTLSエラーを抑止
+    //   - mindar-target.mind → コンパイル済みバッファを返す
+    (function() {
+      var _fetch = window.fetch;
+      window.fetch = function(url, opts) {
+        if (typeof url === 'string') {
+          if (url.indexOf('dpdb.json') !== -1) {
+            return Promise.resolve(new Response('{"devices":[]}', {
+              headers: { 'Content-Type': 'application/json' }
+            }));
+          }
+          if (url.indexOf('mindar-target.mind') !== -1) {
+            if (window._mindARBuffer) {
+              return Promise.resolve(new Response(window._mindARBuffer.slice(0)));
+            }
+          }
+        }
+        return _fetch.apply(this, arguments);
+      };
+
+      // XHR interceptor for dpdb.json
+      var _open = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function(method, url) {
+        if (typeof url === 'string' && url.indexOf('dpdb.json') !== -1) {
+          this._isDpdb = true;
+        }
+        return _open.apply(this, arguments);
+      };
+      var _send = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.send = function(data) {
+        if (!this._isDpdb) return _send.apply(this, arguments);
+        var self = this;
+        setTimeout(function() {
+          Object.defineProperty(self, 'readyState',   { get: function(){ return 4; }, configurable: true });
+          Object.defineProperty(self, 'status',       { get: function(){ return 200; }, configurable: true });
+          Object.defineProperty(self, 'responseText', { get: function(){ return '{"devices":[]}'; }, configurable: true });
+          Object.defineProperty(self, 'response',     { get: function(){ return '{"devices":[]}'; }, configurable: true });
+          if (typeof self.onreadystatechange === 'function') self.onreadystatechange();
+          if (typeof self.onload === 'function') self.onload(new ProgressEvent('load'));
+        }, 10);
       };
     })();
   </script>
@@ -484,7 +529,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.4.0 &nbsp;·&nbsp; 2026-04-28</span>
+      <span class="version-badge">v1.4.1 &nbsp;·&nbsp; 2026-04-28</span>
     </div>
 
     <div class="steps-container">
@@ -605,7 +650,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.4.0</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.4.1</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -617,14 +662,14 @@
     /* ══════════════════════════════════════
        State
     ══════════════════════════════════════ */
-    let activeVideoTab   = 'file';
-    let activeMarkerTab  = 'hiro';
-    let videoObjectURL   = null;
-    let customImageFile  = null;
+    let activeVideoTab    = 'file';
+    let activeMarkerTab   = 'hiro';
+    let videoObjectURL    = null;
+    let customImageFile   = null;
     let customImageObjURL = null;
-    let compiledMindURL  = null;
-    let compiledMindKey  = null;  // source identifier for cache invalidation
-    let arStarted        = false;
+    let compiledMindBuffer = null;  // ArrayBuffer（fetch interceptor経由でMindARに渡す）
+    let compiledMindKey    = null;  // キャッシュキー（変化時だけ再コンパイル）
+    let arStarted          = false;
 
     /* ══════════════════════════════════════
        Tab switching
@@ -679,7 +724,7 @@
       const file = e.target.files[0];
       if (!file) return;
       customImageFile = file;
-      compiledMindURL = null; // 再コンパイル必要
+      compiledMindBuffer = null; // 再コンパイル必要
       compiledMindKey = null;
       if (customImageObjURL) URL.revokeObjectURL(customImageObjURL);
       customImageObjURL = URL.createObjectURL(file);
@@ -696,7 +741,7 @@
       const file = e.dataTransfer.files[0];
       if (file && file.type.startsWith('image/')) {
         customImageFile = file;
-        compiledMindURL = null;
+        compiledMindBuffer = null;
         compiledMindKey = null;
         if (customImageObjURL) URL.revokeObjectURL(customImageObjURL);
         customImageObjURL = URL.createObjectURL(file);
@@ -723,9 +768,7 @@
       await compiler.compileImageTargets([imgEl], (progress) => {
         if (onProgress) onProgress(progress);
       });
-      const buffer = await compiler.exportData();
-      const blob = new Blob([buffer]);
-      return URL.createObjectURL(blob);
+      return await compiler.exportData(); // ArrayBuffer を返す
     }
 
     /* ══════════════════════════════════════
@@ -774,14 +817,16 @@
     /* ══════════════════════════════════════
        Scene rebuild
     ══════════════════════════════════════ */
-    function rebuildScene(mindURL, videoSrc) {
+    function rebuildScene(videoSrc) {
       return new Promise(resolve => {
         const old = document.querySelector('a-scene');
         if (old) old.remove();
 
         const scene = document.createElement('a-scene');
+        // imageTargetSrc に blob URL を使うと A-Frame のパーサーがコロンで誤解析するため
+        // 固定パスを使い、fetch interceptor で window._mindARBuffer を返す
         scene.setAttribute('mindar-image',
-          `imageTargetSrc: ${mindURL}; autoStart: false; uiLoading: no; uiError: no; uiScanning: no`);
+          'imageTargetSrc: ./mindar-target.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
         scene.id = 'main-scene';
@@ -882,9 +927,7 @@
           ? 'custom:' + customImageFile.name + ':' + customImageFile.lastModified
           : 'hiro';
 
-        if (!compiledMindURL || compiledMindKey !== sourceKey) {
-          if (compiledMindURL) { URL.revokeObjectURL(compiledMindURL); compiledMindURL = null; }
-
+        if (!compiledMindBuffer || compiledMindKey !== sourceKey) {
           btn.textContent = '画像を解析中... 0%';
           let imgEl;
           if (activeMarkerTab === 'custom') {
@@ -893,15 +936,18 @@
             imgEl = await loadImageElement('./hiro.png', 'anonymous');
           }
 
-          compiledMindURL = await compileTargetImage(imgEl, (p) => {
+          compiledMindBuffer = await compileTargetImage(imgEl, (p) => {
             btn.textContent = `画像を解析中... ${Math.round(p * 100)}%`;
           });
           compiledMindKey = sourceKey;
         }
 
+        // fetch interceptor が ./mindar-target.mind を要求されたとき返すバッファをセット
+        window._mindARBuffer = compiledMindBuffer;
+
         // ── Step C: シーン構築 ──
         btn.textContent = 'AR を初期化中...';
-        const scene = await rebuildScene(compiledMindURL, videoSrc);
+        const scene = await rebuildScene(videoSrc);
 
         // ── Step D: MindAR 開始 ──
         btn.textContent = 'AR を起動中...';
