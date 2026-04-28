@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>AR Video Player</title>
 
-  <!-- iOS: video要素にplaysinline/muted/autoplayを付与 (AR.jsより先に実行) -->
+  <!-- AR.jsより前に実行: iOS video属性付与 + dpdb.jsonエラー抑止 -->
   <script>
+    // iOS: video要素にplaysinline/muted/autoplayを付与
     (function() {
       var _orig = document.createElement.bind(document);
       document.createElement = function(tag) {
@@ -19,6 +20,19 @@
           el.muted = true;
         }
         return el;
+      };
+    })();
+
+    // dpdb.json の TLS フェッチをインターセプト（A-Frame VRデバイスDB、AR動作に不要）
+    (function() {
+      var _fetch = window.fetch;
+      window.fetch = function(url) {
+        if (typeof url === 'string' && url.indexOf('dpdb.json') !== -1) {
+          return Promise.resolve(new Response('{"devices":[]}', {
+            status: 200, headers: { 'Content-Type': 'application/json' }
+          }));
+        }
+        return _fetch.apply(this, arguments);
       };
     })();
   </script>
@@ -480,30 +494,6 @@
 </head>
 <body>
 
-  <!-- ===== A-FRAME SCENE (静的配置・Hiro デフォルト) ===== -->
-  <a-scene
-    vr-mode-ui="enabled: false"
-    embedded
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-    renderer="antialias: true; alpha: true; logarithmicDepthBuffer: true;"
-    loading-screen="enabled: false"
-    id="main-scene"
-  >
-    <a-assets timeout="30000">
-      <video id="ar-video"
-        src=""
-        autoplay loop muted playsinline
-        crossorigin="anonymous"
-        webkit-playsinline="true">
-      </video>
-    </a-assets>
-    <a-marker id="hiro-marker" preset="hiro"
-      smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
-      <a-video src="#ar-video" width="1.6" height="0.9" rotation="-90 0 0" position="0 0.005 0"></a-video>
-    </a-marker>
-    <a-entity camera ar-portrait-fix></a-entity>
-  </a-scene>
-
   <!-- ===== AR HUD ===== -->
   <div id="ar-hud">
     <div id="ar-status-badge">
@@ -524,7 +514,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">マーカーにカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.3.2 &nbsp;·&nbsp; 2026-04-28</span>
+      <span class="version-badge">v1.3.3 &nbsp;·&nbsp; 2026-04-28</span>
     </div>
 
     <div class="steps-container">
@@ -646,7 +636,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;border:5px solid black;image-rendering:pixelated;"
          alt="Hiro Marker">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.3.2</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.3.3</p>
   </div>
 
   <!-- PRINT-ONLY: custom marker -->
@@ -664,7 +654,7 @@
     let videoObjectURL  = null;
     let customMarkerFile = null;
     let customPatternURL = null;   // blob URL for .patt file
-    let currentSceneType = 'hiro'; // 'hiro' | 'custom'
+    let currentSceneType = null; // null = 未起動, 'hiro' | 'custom'
 
     /* ══════════════════════════════════════
        Tab switching – Marker
@@ -979,32 +969,26 @@
       btn.textContent = '準備中...';
 
       try {
+        let markerAttr;
         if (activeMarkerTab === 'custom') {
-          // Generate .patt if not cached
           if (!customPatternURL) {
             customPatternURL = await imageToPatternURL(customMarkerFile);
           }
-          // Rebuild scene if marker type changed
-          if (currentSceneType !== 'custom') {
-            await rebuildScene(`type="pattern" url="${customPatternURL}"`, videoSrc);
-            currentSceneType = 'custom';
-            markerEventsAttached = false;
-          }
+          markerAttr = `type="pattern" url="${customPatternURL}"`;
         } else {
-          // Hiro: rebuild if coming from custom
-          if (currentSceneType !== 'hiro') {
-            await rebuildScene('preset="hiro"', videoSrc);
-            currentSceneType = 'hiro';
-            markerEventsAttached = false;
-          }
+          markerAttr = 'preset="hiro"';
         }
 
-        // Set video source
-        const vid = document.getElementById('ar-video');
-        if (vid) {
-          vid.src = videoSrc;
-          vid.load();
-          vid.play().catch(() => {});
+        // 初回 or マーカー種別変更時はシーンを再構築（カメラをユーザー操作で起動）
+        const needsRebuild = currentSceneType === null || currentSceneType !== activeMarkerTab;
+        if (needsRebuild) {
+          await rebuildScene(markerAttr, videoSrc);
+          currentSceneType = activeMarkerTab;
+          markerEventsAttached = false;
+        } else {
+          // 同じマーカー種別の再起動: 動画ソースだけ更新
+          const vid = document.getElementById('ar-video');
+          if (vid) { vid.src = videoSrc; vid.load(); vid.play().catch(() => {}); }
         }
 
         // Reset HUD
@@ -1044,10 +1028,6 @@
        Init
     ══════════════════════════════════════ */
     setupCameraVideoObserver();
-
-    document.querySelector('a-scene').addEventListener('loaded', () => {
-      attachMarkerEvents();
-    });
   </script>
 </body>
 </html>
