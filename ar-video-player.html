@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>AR Video Player</title>
 
-  <!-- AR.jsより前に実行: iOS video属性付与 + dpdb.jsonエラー抑止 -->
+  <!-- iOS: video要素にplaysinline/muted/autoplayを付与 -->
   <script>
-    // iOS: video要素にplaysinline/muted/autoplayを付与
     (function() {
       var _orig = document.createElement.bind(document);
       document.createElement = function(tag) {
@@ -22,100 +21,10 @@
         return el;
       };
     })();
-
-    // dpdb.json をインターセプト（A-Frame VRデバイスDB、AR動作に不要）
-    // A-Frameは fetch ではなく XHR を使うため両方を横取り
-    (function() {
-      // fetch interceptor
-      var _fetch = window.fetch;
-      window.fetch = function(url) {
-        if (typeof url === 'string' && url.indexOf('dpdb.json') !== -1) {
-          return Promise.resolve(new Response('{"devices":[]}'));
-        }
-        return _fetch.apply(this, arguments);
-      };
-
-      // XHR interceptor
-      var _open = XMLHttpRequest.prototype.open;
-      XMLHttpRequest.prototype.open = function(method, url) {
-        if (typeof url === 'string' && url.indexOf('dpdb.json') !== -1) {
-          this._isDpdb = true;
-        }
-        return _open.apply(this, arguments);
-      };
-      var _send = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.send = function(data) {
-        if (!this._isDpdb) return _send.apply(this, arguments);
-        var self = this;
-        setTimeout(function() {
-          Object.defineProperty(self, 'readyState',    { get: function(){ return 4; }, configurable: true });
-          Object.defineProperty(self, 'status',        { get: function(){ return 200; }, configurable: true });
-          Object.defineProperty(self, 'responseText',  { get: function(){ return '{"devices":[]}'; }, configurable: true });
-          Object.defineProperty(self, 'response',      { get: function(){ return '{"devices":[]}'; }, configurable: true });
-          if (typeof self.onreadystatechange === 'function') self.onreadystatechange();
-          if (typeof self.onload === 'function') self.onload(new ProgressEvent('load'));
-        }, 10);
-      };
-    })();
   </script>
 
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-
-  <script>
-    // 縦向き時のカメラ投影行列補正
-    // ARToolKitはカメラ解像度(例: 597×796)基準で射影行列を設定するが、
-    // キャンバスはスクリーン解像度(例: 390×844)で描画されるため縦横比がズレる。
-    // カメラ映像の実際の解像度とスクリーン解像度の比を使って補正する。
-    AFRAME.registerComponent('ar-portrait-fix', {
-      init: function() {
-        this._applied = false;
-        this._camVideo = null;
-        window.addEventListener('resize', () => {
-          this._applied = false;
-          this._camVideo = null;
-        });
-      },
-      tick: function() {
-        if (this._applied) return;
-        if (window.innerHeight <= window.innerWidth) {
-          this._applied = true; // 横向きは補正不要
-          return;
-        }
-
-        var cam = this.el.sceneEl.camera;
-        if (!cam) return;
-        var e = cam.projectionMatrix.elements;
-        if (!e[0] || !e[5] || e[0] <= 0 || e[5] <= 0) return;
-
-        if (!this._camVideo) {
-          var videos = document.querySelectorAll('video');
-          for (var i = 0; i < videos.length; i++) {
-            if (!videos[i].id && videos[i].videoWidth > 0) {
-              this._camVideo = videos[i];
-              break;
-            }
-          }
-        }
-        if (!this._camVideo || !this._camVideo.videoWidth) return;
-
-        var camW = this._camVideo.videoWidth;
-        var camH = this._camVideo.videoHeight;
-        var scrW = window.innerWidth;
-        var scrH = window.innerHeight;
-
-        // カメラとスクリーンのアスペクト比が異なる場合のみ補正
-        var camAspect = camW / camH;
-        var scrAspect = scrW / scrH;
-        if (Math.abs(camAspect - scrAspect) > 0.05) {
-          e[0] *= camW / scrW;
-          e[5] *= camH / scrH;
-          cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
-        }
-        this._applied = true;
-      }
-    });
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -265,7 +174,7 @@
       letter-spacing: -0.01em;
     }
 
-    /* ─── Tabs (shared) ─── */
+    /* ─── Tabs ─── */
     .tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
@@ -287,15 +196,15 @@
     .tab-body { display: none; }
     .tab-body.active { display: block; }
 
-    /* ─── Marker section ─── */
-    .marker-row {
+    /* ─── Target image section ─── */
+    .target-row {
       display: flex;
       gap: 1.25rem;
       align-items: flex-start;
     }
-    .marker-thumb-wrap {
+    .target-thumb-wrap {
       flex-shrink: 0;
-      border: 2px solid rgba(0,0,0,0.15);
+      border: 1px solid var(--border);
       border-radius: 6px;
       overflow: hidden;
       width: 80px;
@@ -308,27 +217,27 @@
       display: block;
       image-rendering: pixelated;
     }
-    .marker-desc {
+    .target-desc {
       font-size: 0.82rem;
       color: var(--muted);
       line-height: 1.65;
       margin-bottom: 0.75rem;
     }
 
-    /* Custom marker preview */
-    #marker-preview-wrap {
+    /* Custom image preview */
+    #custom-preview-wrap {
       display: none;
       flex-direction: column;
       align-items: flex-start;
       margin-top: 0.75rem;
     }
-    #marker-canvas {
+    #custom-preview-img {
       display: block;
-      width: 120px;
-      height: 120px;
+      max-width: 160px;
+      max-height: 120px;
       border: 1px solid var(--border);
       border-radius: 6px;
-      image-rendering: pixelated;
+      object-fit: contain;
     }
     .preview-label {
       font-size: 0.75rem;
@@ -550,6 +459,7 @@
       #print-page p { font-size: 0.9rem; color: #555; margin-bottom: 1.5rem; }
     }
     #print-page { display: none; }
+    #print-custom-page { display: none; }
   </style>
 </head>
 <body>
@@ -562,7 +472,7 @@
     </div>
     <button class="btn-exit" onclick="stopAR()">✕ 終了</button>
   </div>
-  <div id="ar-tip">マーカーにカメラを向けてください</div>
+  <div id="ar-tip">画像にカメラを向けてください</div>
 
   <!-- ===== SETUP SCREEN ===== -->
   <div id="screen-setup">
@@ -573,17 +483,17 @@
         </svg>
       </div>
       <h1>AR Video Player</h1>
-      <p class="brand-sub">マーカーにカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.3.5 &nbsp;·&nbsp; 2026-04-28</span>
+      <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
+      <span class="version-badge">v1.4.0 &nbsp;·&nbsp; 2026-04-28</span>
     </div>
 
     <div class="steps-container">
 
-      <!-- ── Step 1: マーカー選択 ── -->
+      <!-- ── Step 1: ターゲット画像 ── -->
       <div class="step-card">
         <div class="step-head">
           <div class="step-badge">1</div>
-          <div class="step-label">マーカーを選択する</div>
+          <div class="step-label">ターゲット画像を選択する</div>
         </div>
 
         <div class="tabs">
@@ -593,14 +503,12 @@
 
         <!-- Hiro tab -->
         <div class="tab-body active" id="mtab-hiro">
-          <div class="marker-row">
-            <div class="marker-thumb-wrap">
-              <img id="hiro-img"
-                src="./hiro.png"
-                alt="Hiro Marker">
+          <div class="target-row">
+            <div class="target-thumb-wrap">
+              <img id="hiro-img" src="./hiro.png" alt="Hiro Target Image">
             </div>
             <div>
-              <p class="marker-desc">「Hiro」マーカーを印刷して、平らな場所に置いてください。推奨サイズは <strong>10cm × 10cm</strong> 以上です。</p>
+              <p class="target-desc">サンプル画像を印刷してカメラでかざしてください。推奨サイズ <strong>10cm × 10cm</strong> 以上。</p>
               <div class="btn-row">
                 <button class="btn-ghost" onclick="printHiroMarker()">🖨 印刷する</button>
                 <button class="btn-ghost" onclick="downloadMarker()">⬇ DL</button>
@@ -612,20 +520,21 @@
         <!-- Custom image tab -->
         <div class="tab-body" id="mtab-custom">
           <div class="file-zone" id="marker-drop-zone">
-            <input type="file" id="marker-file-input" accept="image/*" onchange="handleMarkerImage(event)">
+            <input type="file" id="marker-file-input" accept="image/*" onchange="handleTargetImage(event)">
             <div class="file-zone-text">
-              マーカーにしたい画像をドロップ<br>
+              ARのトリガーにしたい画像をドロップ<br>
               または <span>クリックして選択</span>
             </div>
           </div>
+          <p class="hint-text">特徴が多い画像（写真・ロゴ等）ほど追跡精度が上がります</p>
 
-          <div id="marker-preview-wrap">
-            <p class="preview-label" style="margin-top:0.75rem">印刷用マーカー（黒枠付き）</p>
-            <canvas id="marker-canvas" width="200" height="200"></canvas>
+          <div id="custom-preview-wrap">
+            <p class="preview-label" style="margin-top:0.75rem">選択した画像</p>
+            <img id="custom-preview-img" src="" alt="Target preview">
             <div class="btn-row" style="margin-top:0.6rem">
-              <button class="btn-ghost" onclick="printCustomMarker()">🖨 マーカーを印刷</button>
+              <button class="btn-ghost" onclick="printCustomTarget()">🖨 この画像を印刷</button>
             </div>
-            <p class="hint-text">この画像（黒枠ごと）を 10cm 以上で印刷してください</p>
+            <p class="hint-text">この画像を印刷してカメラでかざしてください</p>
           </div>
         </div>
       </div>
@@ -679,7 +588,7 @@
         </div>
         <div class="permission-notice">
           <span class="notice-icon">📷</span>
-          <span>カメラへのアクセス許可が必要です。ブラウザの確認ダイアログが表示されたら「許可」を選択してください。</span>
+          <span>カメラへのアクセス許可が必要です。初回起動時は画像の解析に数秒かかります。</span>
         </div>
       </div>
 
@@ -689,35 +598,36 @@
     <p class="https-note">⚠ カメラ機能は HTTPS または localhost 環境が必要です</p>
   </div>
 
-  <!-- ===== PRINT-ONLY PAGE (Hiro) ===== -->
+  <!-- ===== PRINT-ONLY: Hiro ===== -->
   <div id="print-page">
-    <h2>AR マーカー — Hiro</h2>
-    <p>このマーカーを 10cm × 10cm 以上で印刷してください</p>
+    <h2>ターゲット画像 — Hiro</h2>
+    <p>この画像を 10cm × 10cm 以上で印刷してください</p>
     <img src="./hiro.png"
-         style="width:220px;height:220px;border:5px solid black;image-rendering:pixelated;"
-         alt="Hiro Marker">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.3.5</p>
+         style="width:220px;height:220px;image-rendering:pixelated;"
+         alt="Hiro Target">
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.4.0</p>
   </div>
 
-  <!-- PRINT-ONLY: custom marker -->
-  <div id="print-custom-page" style="display:none">
-    <canvas id="print-marker-canvas" width="600" height="600"
-      style="width:220px;height:220px;display:block;"></canvas>
+  <!-- PRINT-ONLY: custom target -->
+  <div id="print-custom-page">
+    <img id="print-custom-img" src="" style="max-width:80vw;max-height:80vh;" alt="Custom Target">
   </div>
 
   <script>
     /* ══════════════════════════════════════
        State
     ══════════════════════════════════════ */
-    let activeVideoTab  = 'file';
-    let activeMarkerTab = 'hiro';
-    let videoObjectURL  = null;
-    let customMarkerFile = null;
-    let customPatternURL = null;   // blob URL for .patt file
-    let currentSceneType = null; // null = 未起動, 'hiro' | 'custom'
+    let activeVideoTab   = 'file';
+    let activeMarkerTab  = 'hiro';
+    let videoObjectURL   = null;
+    let customImageFile  = null;
+    let customImageObjURL = null;
+    let compiledMindURL  = null;
+    let compiledMindKey  = null;  // source identifier for cache invalidation
+    let arStarted        = false;
 
     /* ══════════════════════════════════════
-       Tab switching – Marker
+       Tab switching
     ══════════════════════════════════════ */
     function switchMarkerTab(tab) {
       activeMarkerTab = tab;
@@ -727,9 +637,6 @@
         document.getElementById('mtab-' + id).classList.toggle('active', id === tab));
     }
 
-    /* ══════════════════════════════════════
-       Tab switching – Video
-    ══════════════════════════════════════ */
     function switchVideoTab(tab) {
       activeVideoTab = tab;
       document.querySelectorAll('.tab[data-tab]').forEach(el =>
@@ -766,14 +673,18 @@
     });
 
     /* ══════════════════════════════════════
-       Custom Marker Image handling
+       Target image handling
     ══════════════════════════════════════ */
-    function handleMarkerImage(e) {
+    function handleTargetImage(e) {
       const file = e.target.files[0];
       if (!file) return;
-      customMarkerFile = file;
-      customPatternURL = null; // invalidate cached patt
-      renderMarkerPreview(file);
+      customImageFile = file;
+      compiledMindURL = null; // 再コンパイル必要
+      compiledMindKey = null;
+      if (customImageObjURL) URL.revokeObjectURL(customImageObjURL);
+      customImageObjURL = URL.createObjectURL(file);
+      document.getElementById('custom-preview-img').src = customImageObjURL;
+      document.getElementById('custom-preview-wrap').style.display = 'flex';
     }
 
     const markerDropZone = document.getElementById('marker-drop-zone');
@@ -784,88 +695,41 @@
       markerDropZone.style.borderColor = '';
       const file = e.dataTransfer.files[0];
       if (file && file.type.startsWith('image/')) {
-        customMarkerFile = file;
-        customPatternURL = null;
-        renderMarkerPreview(file);
+        customImageFile = file;
+        compiledMindURL = null;
+        compiledMindKey = null;
+        if (customImageObjURL) URL.revokeObjectURL(customImageObjURL);
+        customImageObjURL = URL.createObjectURL(file);
+        document.getElementById('custom-preview-img').src = customImageObjURL;
+        document.getElementById('custom-preview-wrap').style.display = 'flex';
       }
     });
 
-    // Draw the uploaded image WITH the AR black border onto the preview canvas
-    function renderMarkerPreview(file) {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        drawMarkerOnCanvas(img, document.getElementById('marker-canvas'), 200);
-        URL.revokeObjectURL(url);
-        document.getElementById('marker-preview-wrap').style.display = 'flex';
-      };
-      img.src = url;
-    }
-
-    // Draws image with the required black AR border onto a canvas
-    function drawMarkerOnCanvas(img, canvas, size) {
-      const ctx = canvas.getContext('2d');
-      const border = Math.round(size * 0.2); // 20% border on each side
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, size, size);
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(border, border, size - border * 2, size - border * 2);
-      const pad = Math.round(size * 0.04);
-      ctx.drawImage(img,
-        border + pad, border + pad,
-        size - (border + pad) * 2, size - (border + pad) * 2
-      );
-    }
-
-    /* ── Generate ARToolKit .patt file from the inner image (16×16 grid, 4 rotations) ── */
-    function imageToPatternURL(file) {
+    /* ══════════════════════════════════════
+       MindAR target compilation
+    ══════════════════════════════════════ */
+    function loadImageElement(src, crossOrigin) {
       return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file);
         const img = new Image();
-        img.onload = () => {
-          const SIZE = 16;
-          const c = document.createElement('canvas');
-          c.width = c.height = SIZE;
-          const ctx = c.getContext('2d');
-          ctx.drawImage(img, 0, 0, SIZE, SIZE);
-          URL.revokeObjectURL(url);
-
-          const d = ctx.getImageData(0, 0, SIZE, SIZE).data;
-          const px = (x, y, ch) => d[(y * SIZE + x) * 4 + ch];
-
-          // 4 rotations: (x,y) in OUTPUT maps to (sx,sy) in INPUT
-          const rotations = [
-            (x, y) => [x, y],
-            (x, y) => [SIZE - 1 - y, x],
-            (x, y) => [SIZE - 1 - x, SIZE - 1 - y],
-            (x, y) => [y, SIZE - 1 - x],
-          ];
-
-          let patt = `${SIZE} ${SIZE}\n`;
-          for (const rot of rotations) {
-            patt += '\n';
-            for (let ch = 0; ch < 3; ch++) {
-              for (let y = 0; y < SIZE; y++) {
-                const row = [];
-                for (let x = 0; x < SIZE; x++) {
-                  const [sx, sy] = rot(x, y);
-                  row.push(px(sx, sy, ch));
-                }
-                patt += row.join(' ') + '\n';
-              }
-            }
-          }
-
-          const blob = new Blob([patt], { type: 'text/plain' });
-          resolve(URL.createObjectURL(blob));
-        };
+        if (crossOrigin) img.crossOrigin = crossOrigin;
+        img.onload = () => resolve(img);
         img.onerror = reject;
-        img.src = url;
+        img.src = src;
       });
     }
 
+    async function compileTargetImage(imgEl, onProgress) {
+      const compiler = new MINDAR.IMAGE.Compiler();
+      await compiler.compileImageTargets([imgEl], (progress) => {
+        if (onProgress) onProgress(progress);
+      });
+      const buffer = await compiler.exportData();
+      const blob = new Blob([buffer]);
+      return URL.createObjectURL(blob);
+    }
+
     /* ══════════════════════════════════════
-       Marker printing
+       Printing
     ══════════════════════════════════════ */
     function printHiroMarker() {
       document.getElementById('print-page').style.display = 'flex';
@@ -873,25 +737,18 @@
       document.getElementById('print-page').style.display = 'none';
     }
 
-    function printCustomMarker() {
-      if (!customMarkerFile) return;
-      const url = URL.createObjectURL(customMarkerFile);
-      const img = new Image();
-      img.onload = () => {
-        const printCanvas = document.getElementById('print-marker-canvas');
-        drawMarkerOnCanvas(img, printCanvas, 600);
-        URL.revokeObjectURL(url);
-        document.getElementById('print-custom-page').style.display = 'flex';
-        window.print();
-        document.getElementById('print-custom-page').style.display = 'none';
-      };
-      img.src = url;
+    function printCustomTarget() {
+      if (!customImageObjURL) return;
+      document.getElementById('print-custom-img').src = customImageObjURL;
+      document.getElementById('print-custom-page').style.display = 'flex';
+      window.print();
+      document.getElementById('print-custom-page').style.display = 'none';
     }
 
     function downloadMarker() {
       const a = document.createElement('a');
       a.href = './hiro.png';
-      a.download = 'hiro-marker.png';
+      a.download = 'hiro-target.png';
       a.target = '_blank'; a.rel = 'noopener';
       document.body.appendChild(a);
       a.click();
@@ -915,93 +772,63 @@
     }
 
     /* ══════════════════════════════════════
-       Camera video observer (call before scene rebuild)
+       Scene rebuild
     ══════════════════════════════════════ */
-    function setupCameraVideoObserver() {
-      const obs = new MutationObserver(mutations => {
-        for (const m of mutations) {
-          for (const node of m.addedNodes) {
-            if (node.tagName === 'VIDEO' && !node.id) {
-              node.style.cssText = [
-                'position:fixed!important',
-                'top:0!important', 'left:0!important',
-                'width:100%!important', 'height:100%!important',
-                'object-fit:cover!important',
-                'opacity:0.01!important',
-                'z-index:0!important'
-              ].join(';');
-              obs.disconnect();
-            }
-          }
-        }
-      });
-      obs.observe(document.documentElement, { childList: true, subtree: true });
-    }
-
-    /* ══════════════════════════════════════
-       Scene rebuild (for custom marker type)
-    ══════════════════════════════════════ */
-    function rebuildScene(markerAttrStr, videoSrc) {
+    function rebuildScene(mindURL, videoSrc) {
       return new Promise(resolve => {
         const old = document.querySelector('a-scene');
         if (old) old.remove();
 
-        setupCameraVideoObserver();
+        const scene = document.createElement('a-scene');
+        scene.setAttribute('mindar-image',
+          `imageTargetSrc: ${mindURL}; autoStart: false; uiLoading: no; uiError: no; uiScanning: no`);
+        scene.setAttribute('vr-mode-ui', 'enabled: false');
+        scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+        scene.id = 'main-scene';
 
-        const sceneEl = document.createElement('a-scene');
-        sceneEl.setAttribute('vr-mode-ui', 'enabled: false');
-        sceneEl.setAttribute('embedded', '');
-        sceneEl.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false;');
-        sceneEl.setAttribute('renderer', 'antialias: true; alpha: true; logarithmicDepthBuffer: true;');
-        sceneEl.setAttribute('loading-screen', 'enabled: false');
-        sceneEl.id = 'main-scene';
-
-        sceneEl.innerHTML = `
+        scene.innerHTML = `
           <a-assets timeout="30000">
             <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline
               crossorigin="anonymous" webkit-playsinline="true"></video>
           </a-assets>
-          <a-marker id="hiro-marker" ${markerAttrStr}
-            smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="5">
-            <a-video src="#ar-video" width="1.6" height="0.9" rotation="-90 0 0" position="0 0.005 0"></a-video>
-          </a-marker>
-          <a-entity camera ar-portrait-fix></a-entity>
+          <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+          <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+            <a-video src="#ar-video" width="1" height="0.5625" position="0 0 0.001"></a-video>
+          </a-entity>
         `;
 
-        document.body.insertBefore(sceneEl, document.body.firstChild);
+        document.body.insertBefore(scene, document.body.firstChild);
 
         let done = false;
-        const finish = () => { if (!done) { done = true; resolve(); } };
-        sceneEl.addEventListener('loaded', finish, { once: true });
-        setTimeout(finish, 3000); // fallback
+        const finish = () => { if (!done) { done = true; resolve(scene); } };
+        scene.addEventListener('loaded', finish, { once: true });
+        setTimeout(finish, 4000);
       });
     }
 
     /* ══════════════════════════════════════
-       Marker events
+       Target events
     ══════════════════════════════════════ */
-    let markerEventsAttached = false;
+    function attachTargetEvents() {
+      const target = document.getElementById('ar-target');
+      if (!target) { setTimeout(attachTargetEvents, 500); return; }
+      if (target._evts) return;
+      target._evts = true;
 
-    function attachMarkerEvents() {
-      const marker = document.getElementById('hiro-marker');
-      if (!marker) { setTimeout(attachMarkerEvents, 500); return; }
-      if (marker._evts) return;
-      marker._evts = true;
-      markerEventsAttached = true;
-
-      marker.addEventListener('markerFound', () => {
-        document.getElementById('pulsedot').classList.replace('searching', 'found') ||
-          document.getElementById('pulsedot').classList.add('found');
-        document.getElementById('pulsedot').classList.remove('searching');
+      target.addEventListener('targetFound', () => {
+        const dot = document.getElementById('pulsedot');
+        dot.classList.remove('searching');
+        dot.classList.add('found');
         document.getElementById('status-label').textContent = '動画を再生中';
         document.getElementById('ar-tip').classList.add('hidden');
         document.getElementById('ar-video')?.play().catch(() => {});
       });
 
-      marker.addEventListener('markerLost', () => {
-        document.getElementById('pulsedot').classList.remove('found');
-        document.getElementById('pulsedot').classList.add('searching');
-        document.getElementById('status-label').textContent = 'マーカーを探しています...';
+      target.addEventListener('targetLost', () => {
+        const dot = document.getElementById('pulsedot');
+        dot.classList.remove('found');
+        dot.classList.add('searching');
+        document.getElementById('status-label').textContent = '画像を探しています...';
         document.getElementById('ar-tip').classList.remove('hidden');
       });
     }
@@ -1013,84 +840,100 @@
       const videoSrc = resolveVideoSrc();
       if (!videoSrc) return;
 
-      // Custom marker validation
-      if (activeMarkerTab === 'custom' && !customMarkerFile) {
-        alert('カスタムマーカーの画像を選択してください。');
+      if (activeMarkerTab === 'custom' && !customImageFile) {
+        alert('ターゲット画像を選択してください。');
         return;
       }
 
-      // iOS motion sensor permission
       if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission().catch(() => {});
       }
 
       const btn = document.getElementById('btn-start');
       btn.disabled = true;
-      btn.textContent = 'カメラにアクセス中...';
 
       try {
-        // ── Step A: ユーザー操作中にカメラを取得（iOS 必須）──
+        // ── Step A: カメラストリーム取得（iOS ユーザー操作コンテキスト必須）──
+        btn.textContent = 'カメラにアクセス中...';
         let cameraStream;
         try {
           cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } },
-            audio: false
+            video: { facingMode: { ideal: 'environment' } }, audio: false
           });
         } catch (e) {
           alert('カメラへのアクセスができません。\nブラウザの設定でカメラを許可してください。\n(' + e.name + ')');
           return;
         }
 
-        // ── Step B: AR.js が getUserMedia を呼んだとき取得済みストリームを渡す ──
+        // MindAR が内部で getUserMedia を呼んだとき取得済みストリームを渡す
         const _origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-        let streamHandedOff = false;
-        navigator.mediaDevices.getUserMedia = function(constraints) {
-          if (!streamHandedOff && cameraStream) {
-            streamHandedOff = true;
-            navigator.mediaDevices.getUserMedia = _origGUM; // 復元
+        let handed = false;
+        navigator.mediaDevices.getUserMedia = function(c) {
+          if (!handed) {
+            handed = true;
+            navigator.mediaDevices.getUserMedia = _origGUM;
             return Promise.resolve(cameraStream);
           }
-          return _origGUM(constraints);
+          return _origGUM(c);
         };
 
-        // ── Step C: マーカー準備 ──
-        let markerAttr;
-        if (activeMarkerTab === 'custom') {
-          btn.textContent = 'マーカーを準備中...';
-          if (!customPatternURL) {
-            customPatternURL = await imageToPatternURL(customMarkerFile);
+        // ── Step B: ターゲット画像のコンパイル（キャッシュあれば省略）──
+        const sourceKey = activeMarkerTab === 'custom'
+          ? 'custom:' + customImageFile.name + ':' + customImageFile.lastModified
+          : 'hiro';
+
+        if (!compiledMindURL || compiledMindKey !== sourceKey) {
+          if (compiledMindURL) { URL.revokeObjectURL(compiledMindURL); compiledMindURL = null; }
+
+          btn.textContent = '画像を解析中... 0%';
+          let imgEl;
+          if (activeMarkerTab === 'custom') {
+            imgEl = await loadImageElement(customImageObjURL);
+          } else {
+            imgEl = await loadImageElement('./hiro.png', 'anonymous');
           }
-          markerAttr = `type="pattern" url="${customPatternURL}"`;
-        } else {
-          markerAttr = 'preset="hiro"';
+
+          compiledMindURL = await compileTargetImage(imgEl, (p) => {
+            btn.textContent = `画像を解析中... ${Math.round(p * 100)}%`;
+          });
+          compiledMindKey = sourceKey;
         }
 
-        // ── Step D: シーン構築（初回 or マーカー種別変更時）──
-        const needsRebuild = currentSceneType === null || currentSceneType !== activeMarkerTab;
-        btn.textContent = needsRebuild ? 'AR を初期化中...' : '動画を読み込み中...';
+        // ── Step C: シーン構築 ──
+        btn.textContent = 'AR を初期化中...';
+        const scene = await rebuildScene(compiledMindURL, videoSrc);
 
-        if (needsRebuild) {
-          await rebuildScene(markerAttr, videoSrc);
-          currentSceneType = activeMarkerTab;
-          markerEventsAttached = false;
+        // ── Step D: MindAR 開始 ──
+        btn.textContent = 'AR を起動中...';
+        const system = scene.systems['mindar-image-system'];
+        if (system) {
+          await system.start();
         } else {
-          const vid = document.getElementById('ar-video');
-          if (vid) { vid.src = videoSrc; vid.load(); vid.play().catch(() => {}); }
+          await new Promise(resolve => {
+            const poll = setInterval(() => {
+              const s = document.getElementById('main-scene')?.systems?.['mindar-image-system'];
+              if (s) { clearInterval(poll); s.start().then(resolve).catch(resolve); }
+            }, 200);
+            setTimeout(() => { clearInterval(poll); resolve(); }, 5000);
+          });
         }
 
         // ── Step E: HUD 表示 ──
         const dot = document.getElementById('pulsedot');
-        dot.classList.remove('found');
-        dot.classList.add('searching');
-        document.getElementById('status-label').textContent = 'マーカーを探しています...';
+        dot.className = 'pulsedot searching';
+        document.getElementById('status-label').textContent = '画像を探しています...';
         document.getElementById('screen-setup').style.display = 'none';
         document.getElementById('ar-hud').style.display = 'flex';
         const tip = document.getElementById('ar-tip');
         tip.style.display = 'block';
         tip.classList.remove('hidden');
 
-        if (!markerEventsAttached) setTimeout(attachMarkerEvents, 1500);
+        arStarted = true;
+        setTimeout(attachTargetEvents, 1000);
 
+      } catch (e) {
+        console.error('AR start error:', e);
+        alert('AR の起動に失敗しました。ページを再読み込みしてください。\n' + e.message);
       } finally {
         btn.disabled = false;
         btn.textContent = 'カメラを起動して AR を開始 →';
@@ -1101,18 +944,19 @@
        Stop AR
     ══════════════════════════════════════ */
     function stopAR() {
+      const scene = document.getElementById('main-scene');
+      if (scene) {
+        const system = scene.systems['mindar-image-system'];
+        if (system) system.stop();
+      }
       const vid = document.getElementById('ar-video');
-      if (vid) { vid.pause(); vid.src = ''; }
+      if (vid) { vid.pause(); }
 
+      arStarted = false;
       document.getElementById('ar-hud').style.display = 'none';
       document.getElementById('ar-tip').style.display = 'none';
       document.getElementById('screen-setup').style.display = 'flex';
     }
-
-    /* ══════════════════════════════════════
-       Init
-    ══════════════════════════════════════ */
-    setupCameraVideoObserver();
   </script>
 </body>
 </html>
