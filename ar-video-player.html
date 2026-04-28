@@ -529,7 +529,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.4.1 &nbsp;·&nbsp; 2026-04-28</span>
+      <span class="version-badge">v1.4.2 &nbsp;·&nbsp; 2026-04-28</span>
     </div>
 
     <div class="steps-container">
@@ -650,7 +650,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.4.1</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.4.2</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -949,20 +949,26 @@
         btn.textContent = 'AR を初期化中...';
         const scene = await rebuildScene(videoSrc);
 
-        // ── Step D: MindAR 開始 ──
+        // ── Step D: mindar-image コンポーネントの init() 完了を待つ ──
+        // loaded イベント発火後も component.init() が非同期で遅れる場合があるため
+        // initialized フラグが true になるまでポーリングしてから start() を呼ぶ
+        btn.textContent = 'AR を準備中...';
+        await new Promise((resolve, reject) => {
+          const deadline = Date.now() + 10000;
+          const check = () => {
+            const comp = scene.components?.['mindar-image'];
+            if (comp && comp.initialized) { resolve(); return; }
+            if (Date.now() > deadline) { reject(new Error('MindAR component init timeout')); return; }
+            setTimeout(check, 80);
+          };
+          check();
+        });
+
+        // ── Step E: MindAR 開始 ──
         btn.textContent = 'AR を起動中...';
         const system = scene.systems['mindar-image-system'];
-        if (system) {
-          await system.start();
-        } else {
-          await new Promise(resolve => {
-            const poll = setInterval(() => {
-              const s = document.getElementById('main-scene')?.systems?.['mindar-image-system'];
-              if (s) { clearInterval(poll); s.start().then(resolve).catch(resolve); }
-            }, 200);
-            setTimeout(() => { clearInterval(poll); resolve(); }, 5000);
-          });
-        }
+        if (!system) throw new Error('MindAR system not found');
+        await system.start();
 
         // ── Step E: HUD 表示 ──
         const dot = document.getElementById('pulsedot');
