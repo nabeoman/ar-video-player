@@ -23,16 +23,38 @@
       };
     })();
 
-    // dpdb.json の TLS フェッチをインターセプト（A-Frame VRデバイスDB、AR動作に不要）
+    // dpdb.json をインターセプト（A-Frame VRデバイスDB、AR動作に不要）
+    // A-Frameは fetch ではなく XHR を使うため両方を横取り
     (function() {
+      // fetch interceptor
       var _fetch = window.fetch;
       window.fetch = function(url) {
         if (typeof url === 'string' && url.indexOf('dpdb.json') !== -1) {
-          return Promise.resolve(new Response('{"devices":[]}', {
-            status: 200, headers: { 'Content-Type': 'application/json' }
-          }));
+          return Promise.resolve(new Response('{"devices":[]}'));
         }
         return _fetch.apply(this, arguments);
+      };
+
+      // XHR interceptor
+      var _open = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function(method, url) {
+        if (typeof url === 'string' && url.indexOf('dpdb.json') !== -1) {
+          this._isDpdb = true;
+        }
+        return _open.apply(this, arguments);
+      };
+      var _send = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.send = function(data) {
+        if (!this._isDpdb) return _send.apply(this, arguments);
+        var self = this;
+        setTimeout(function() {
+          Object.defineProperty(self, 'readyState',    { get: function(){ return 4; }, configurable: true });
+          Object.defineProperty(self, 'status',        { get: function(){ return 200; }, configurable: true });
+          Object.defineProperty(self, 'responseText',  { get: function(){ return '{"devices":[]}'; }, configurable: true });
+          Object.defineProperty(self, 'response',      { get: function(){ return '{"devices":[]}'; }, configurable: true });
+          if (typeof self.onreadystatechange === 'function') self.onreadystatechange();
+          if (typeof self.onload === 'function') self.onload(new ProgressEvent('load'));
+        }, 10);
       };
     })();
   </script>
@@ -514,7 +536,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">マーカーにカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.3.3 &nbsp;·&nbsp; 2026-04-28</span>
+      <span class="version-badge">v1.3.4 &nbsp;·&nbsp; 2026-04-28</span>
     </div>
 
     <div class="steps-container">
@@ -636,7 +658,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;border:5px solid black;image-rendering:pixelated;"
          alt="Hiro Marker">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.3.3</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.3.4</p>
   </div>
 
   <!-- PRINT-ONLY: custom marker -->
@@ -959,18 +981,44 @@
         return;
       }
 
-      // iOS motion sensor
+      // iOS motion sensor permission
       if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission().catch(() => {});
       }
 
       const btn = document.getElementById('btn-start');
       btn.disabled = true;
-      btn.textContent = '準備中...';
+      btn.textContent = 'カメラにアクセス中...';
 
       try {
+        // ── Step A: ユーザー操作中にカメラを取得（iOS 必須）──
+        let cameraStream;
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+            audio: false
+          });
+        } catch (e) {
+          alert('カメラへのアクセスができません。\nブラウザの設定でカメラを許可してください。\n(' + e.name + ')');
+          return;
+        }
+
+        // ── Step B: AR.js が getUserMedia を呼んだとき取得済みストリームを渡す ──
+        const _origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        let streamHandedOff = false;
+        navigator.mediaDevices.getUserMedia = function(constraints) {
+          if (!streamHandedOff && cameraStream) {
+            streamHandedOff = true;
+            navigator.mediaDevices.getUserMedia = _origGUM; // 復元
+            return Promise.resolve(cameraStream);
+          }
+          return _origGUM(constraints);
+        };
+
+        // ── Step C: マーカー準備 ──
         let markerAttr;
         if (activeMarkerTab === 'custom') {
+          btn.textContent = 'マーカーを準備中...';
           if (!customPatternURL) {
             customPatternURL = await imageToPatternURL(customMarkerFile);
           }
@@ -979,25 +1027,24 @@
           markerAttr = 'preset="hiro"';
         }
 
-        // 初回 or マーカー種別変更時はシーンを再構築（カメラをユーザー操作で起動）
+        // ── Step D: シーン構築（初回 or マーカー種別変更時）──
         const needsRebuild = currentSceneType === null || currentSceneType !== activeMarkerTab;
+        btn.textContent = needsRebuild ? 'AR を初期化中...' : '動画を読み込み中...';
+
         if (needsRebuild) {
           await rebuildScene(markerAttr, videoSrc);
           currentSceneType = activeMarkerTab;
           markerEventsAttached = false;
         } else {
-          // 同じマーカー種別の再起動: 動画ソースだけ更新
           const vid = document.getElementById('ar-video');
           if (vid) { vid.src = videoSrc; vid.load(); vid.play().catch(() => {}); }
         }
 
-        // Reset HUD
+        // ── Step E: HUD 表示 ──
         const dot = document.getElementById('pulsedot');
         dot.classList.remove('found');
         dot.classList.add('searching');
         document.getElementById('status-label').textContent = 'マーカーを探しています...';
-
-        // Show AR UI
         document.getElementById('screen-setup').style.display = 'none';
         document.getElementById('ar-hud').style.display = 'flex';
         const tip = document.getElementById('ar-tip');
