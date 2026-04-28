@@ -529,7 +529,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.4.2 &nbsp;·&nbsp; 2026-04-28</span>
+      <span class="version-badge">v1.4.3 &nbsp;·&nbsp; 2026-04-28</span>
     </div>
 
     <div class="steps-container">
@@ -650,7 +650,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.4.2</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.4.3</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -825,8 +825,10 @@
         const scene = document.createElement('a-scene');
         // imageTargetSrc に blob URL を使うと A-Frame のパーサーがコロンで誤解析するため
         // 固定パスを使い、fetch interceptor で window._mindARBuffer を返す
+        // autoStart: false + 手動 system.start() は this.ui 競合で不安定なため
+        // autoStart を省略（デフォルト true）にして MindAR 自身に起動を管理させる
         scene.setAttribute('mindar-image',
-          'imageTargetSrc: ./mindar-target.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no');
+          'imageTargetSrc: ./mindar-target.mind; uiLoading: no; uiError: no; uiScanning: no');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
         scene.id = 'main-scene';
@@ -949,28 +951,10 @@
         btn.textContent = 'AR を初期化中...';
         const scene = await rebuildScene(videoSrc);
 
-        // ── Step D: mindar-image コンポーネントの init() 完了を待つ ──
-        // loaded イベント発火後も component.init() が非同期で遅れる場合があるため
-        // initialized フラグが true になるまでポーリングしてから start() を呼ぶ
-        btn.textContent = 'AR を準備中...';
-        await new Promise((resolve, reject) => {
-          const deadline = Date.now() + 10000;
-          const check = () => {
-            const comp = scene.components?.['mindar-image'];
-            if (comp && comp.initialized) { resolve(); return; }
-            if (Date.now() > deadline) { reject(new Error('MindAR component init timeout')); return; }
-            setTimeout(check, 80);
-          };
-          check();
-        });
-
-        // ── Step E: MindAR 開始 ──
-        btn.textContent = 'AR を起動中...';
-        const system = scene.systems['mindar-image-system'];
-        if (!system) throw new Error('MindAR system not found');
-        await system.start();
-
-        // ── Step E: HUD 表示 ──
+        // ── Step D: HUD 表示 ──
+        // autoStart: true（デフォルト）により MindAR はシーン挿入時に自動起動する。
+        // getUserMedia は既に取得済みストリームを返すオーバーライドが有効なので iOS でも動作する。
+        // system.start() は呼ばない（MindAR 内部ライフサイクルに任せる）。
         const dot = document.getElementById('pulsedot');
         dot.className = 'pulsedot searching';
         document.getElementById('status-label').textContent = '画像を探しています...';
@@ -985,7 +969,13 @@
 
       } catch (e) {
         console.error('AR start error:', e);
-        alert('AR の起動に失敗しました。ページを再読み込みしてください。\n' + e.message);
+        // 失敗時: 途中で挿入されたシーンを除去してセットアップ画面を復元
+        const failedScene = document.querySelector('a-scene');
+        if (failedScene) failedScene.remove();
+        document.getElementById('screen-setup').style.display = 'flex';
+        document.getElementById('ar-hud').style.display = 'none';
+        document.getElementById('ar-tip').style.display = 'none';
+        alert('AR の起動に失敗しました。もう一度お試しください。\n' + e.message);
       } finally {
         btn.disabled = false;
         btn.textContent = 'カメラを起動して AR を開始 →';
