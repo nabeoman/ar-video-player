@@ -64,17 +64,55 @@
 
   <script>
     // 縦向き時のカメラ投影行列補正
+    // ARToolKitはカメラ解像度(例: 597×796)基準で射影行列を設定するが、
+    // キャンバスはスクリーン解像度(例: 390×844)で描画されるため縦横比がズレる。
+    // カメラ映像の実際の解像度とスクリーン解像度の比を使って補正する。
     AFRAME.registerComponent('ar-portrait-fix', {
+      init: function() {
+        this._applied = false;
+        this._camVideo = null;
+        window.addEventListener('resize', () => {
+          this._applied = false;
+          this._camVideo = null;
+        });
+      },
       tick: function() {
-        if (window.innerHeight <= window.innerWidth) return;
+        if (this._applied) return;
+        if (window.innerHeight <= window.innerWidth) {
+          this._applied = true; // 横向きは補正不要
+          return;
+        }
+
         var cam = this.el.sceneEl.camera;
         if (!cam) return;
         var e = cam.projectionMatrix.elements;
-        if (e[0] <= 0 || e[5] <= 0) return;
-        if (e[5] / e[0] > 1.3) {
-          e[0] *= 640 / 480;
-          e[5] *= 480 / 640;
+        if (!e[0] || !e[5] || e[0] <= 0 || e[5] <= 0) return;
+
+        if (!this._camVideo) {
+          var videos = document.querySelectorAll('video');
+          for (var i = 0; i < videos.length; i++) {
+            if (!videos[i].id && videos[i].videoWidth > 0) {
+              this._camVideo = videos[i];
+              break;
+            }
+          }
         }
+        if (!this._camVideo || !this._camVideo.videoWidth) return;
+
+        var camW = this._camVideo.videoWidth;
+        var camH = this._camVideo.videoHeight;
+        var scrW = window.innerWidth;
+        var scrH = window.innerHeight;
+
+        // カメラとスクリーンのアスペクト比が異なる場合のみ補正
+        var camAspect = camW / camH;
+        var scrAspect = scrW / scrH;
+        if (Math.abs(camAspect - scrAspect) > 0.05) {
+          e[0] *= camW / scrW;
+          e[5] *= camH / scrH;
+          cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+        }
+        this._applied = true;
       }
     });
   </script>
@@ -536,7 +574,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">マーカーにカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.3.4 &nbsp;·&nbsp; 2026-04-28</span>
+      <span class="version-badge">v1.3.5 &nbsp;·&nbsp; 2026-04-28</span>
     </div>
 
     <div class="steps-container">
@@ -658,7 +696,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;border:5px solid black;image-rendering:pixelated;"
          alt="Hiro Marker">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.3.4</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.3.5</p>
   </div>
 
   <!-- PRINT-ONLY: custom marker -->
@@ -924,7 +962,7 @@
               crossorigin="anonymous" webkit-playsinline="true"></video>
           </a-assets>
           <a-marker id="hiro-marker" ${markerAttrStr}
-            smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
+            smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="5">
             <a-video src="#ar-video" width="1.6" height="0.9" rotation="-90 0 0" position="0 0.005 0"></a-video>
           </a-marker>
           <a-entity camera ar-portrait-fix></a-entity>
