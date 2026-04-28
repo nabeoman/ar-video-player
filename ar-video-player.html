@@ -546,8 +546,8 @@
           <div class="marker-row">
             <div class="marker-thumb-wrap">
               <img id="hiro-img"
-                src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.5/data/images/hiro.png"
-                alt="Hiro Marker" crossorigin="anonymous">
+                src="./hiro.png"
+                alt="Hiro Marker">
             </div>
             <div>
               <p class="marker-desc">「Hiro」マーカーを印刷して、平らな場所に置いてください。推奨サイズは <strong>10cm × 10cm</strong> 以上です。</p>
@@ -643,7 +643,7 @@
   <div id="print-page">
     <h2>AR マーカー — Hiro</h2>
     <p>このマーカーを 10cm × 10cm 以上で印刷してください</p>
-    <img src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.5/data/images/hiro.png"
+    <img src="./hiro.png"
          style="width:220px;height:220px;border:5px solid black;image-rendering:pixelated;"
          alt="Hiro Marker">
     <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.3.0</p>
@@ -840,7 +840,7 @@
 
     function downloadMarker() {
       const a = document.createElement('a');
-      a.href = 'https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.5/data/images/hiro.png';
+      a.href = './hiro.png';
       a.download = 'hiro-marker.png';
       a.target = '_blank'; a.rel = 'noopener';
       document.body.appendChild(a);
