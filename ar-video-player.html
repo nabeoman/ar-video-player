@@ -21,36 +21,13 @@
         return el;
       };
     })();
-
-    // AR.jsが生成するカメラ映像videoを全画面に固定
-    (function() {
-      var obs = new MutationObserver(function(mutations) {
-        for (var i = 0; i < mutations.length; i++) {
-          for (var j = 0; j < mutations[i].addedNodes.length; j++) {
-            var node = mutations[i].addedNodes[j];
-            if (node.tagName === 'VIDEO' && !node.id) {
-              node.style.cssText = [
-                'position:fixed!important',
-                'top:0!important', 'left:0!important',
-                'width:100%!important', 'height:100%!important',
-                'object-fit:cover!important',
-                'opacity:0.01!important',
-                'z-index:0!important'
-              ].join(';');
-              obs.disconnect();
-            }
-          }
-        }
-      });
-      obs.observe(document.documentElement, { childList: true, subtree: true });
-    })();
   </script>
 
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
   <script>
-    // 縦向き時のカメラ投影行列を補正 (ar-demoより移植)
+    // 縦向き時のカメラ投影行列補正
     AFRAME.registerComponent('ar-portrait-fix', {
       tick: function() {
         if (window.innerHeight <= window.innerWidth) return;
@@ -81,8 +58,6 @@
       --accent-dim: rgba(92,110,245,0.10);
       --accent-hover: #4a5ce3;
       --success: #0faa7e;
-      --success-dim: rgba(15,170,126,0.12);
-      --danger: #e84040;
       --r: 10px;
       --r-lg: 16px;
     }
@@ -95,7 +70,6 @@
       overflow: hidden;
     }
 
-    /* a-scene を背面に全画面表示 */
     a-scene {
       position: fixed !important;
       top: 0; left: 0;
@@ -143,7 +117,6 @@
       margin-bottom: 1rem;
       box-shadow: 0 2px 8px rgba(92,110,245,0.15);
     }
-
     .brand-icon svg { width: 26px; height: 26px; }
 
     h1 {
@@ -165,7 +138,6 @@
     .version-badge {
       display: inline-flex;
       align-items: center;
-      gap: 0.35rem;
       margin-top: 0.6rem;
       padding: 0.2rem 0.65rem;
       background: var(--surface2);
@@ -219,61 +191,12 @@
       letter-spacing: -0.01em;
     }
 
-    .marker-row {
-      display: flex;
-      gap: 1.25rem;
-      align-items: flex-start;
-    }
-
-    .marker-thumb-wrap {
-      flex-shrink: 0;
-      border: 2px solid rgba(0,0,0,0.15);
-      border-radius: 6px;
-      overflow: hidden;
-      width: 80px;
-      height: 80px;
-      background: white;
-    }
-
-    #hiro-img {
-      width: 80px;
-      height: 80px;
-      display: block;
-      image-rendering: pixelated;
-    }
-
-    .marker-desc {
-      font-size: 0.82rem;
-      color: var(--muted);
-      line-height: 1.65;
-      margin-bottom: 0.75rem;
-    }
-
-    .btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-
-    .btn-ghost {
-      padding: 0.375rem 0.875rem;
-      background: var(--surface2);
-      border: 1px solid var(--border-hover);
-      border-radius: 7px;
-      color: var(--text);
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-      white-space: nowrap;
-    }
-    .btn-ghost:hover {
-      background: #eaecff;
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
+    /* ─── Tabs (shared) ─── */
     .tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
       margin-bottom: 1rem;
     }
-
     .tab {
       padding: 0.45rem 0.875rem;
       background: none;
@@ -286,14 +209,113 @@
       transition: color 0.15s, border-color 0.15s;
       font-family: inherit;
     }
-    .tab.active {
-      color: var(--text);
-      border-bottom-color: var(--accent);
-    }
-
+    .tab.active { color: var(--text); border-bottom-color: var(--accent); }
     .tab-body { display: none; }
     .tab-body.active { display: block; }
 
+    /* ─── Marker section ─── */
+    .marker-row {
+      display: flex;
+      gap: 1.25rem;
+      align-items: flex-start;
+    }
+    .marker-thumb-wrap {
+      flex-shrink: 0;
+      border: 2px solid rgba(0,0,0,0.15);
+      border-radius: 6px;
+      overflow: hidden;
+      width: 80px;
+      height: 80px;
+      background: white;
+    }
+    #hiro-img {
+      width: 80px;
+      height: 80px;
+      display: block;
+      image-rendering: pixelated;
+    }
+    .marker-desc {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.65;
+      margin-bottom: 0.75rem;
+    }
+
+    /* Custom marker preview */
+    #marker-preview-wrap {
+      display: none;
+      flex-direction: column;
+      align-items: flex-start;
+      margin-top: 0.75rem;
+    }
+    #marker-canvas {
+      display: block;
+      width: 120px;
+      height: 120px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      image-rendering: pixelated;
+    }
+    .preview-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+
+    /* ─── Buttons ─── */
+    .btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    .btn-ghost {
+      padding: 0.375rem 0.875rem;
+      background: var(--surface2);
+      border: 1px solid var(--border-hover);
+      border-radius: 7px;
+      color: var(--text);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .btn-ghost:hover {
+      background: #eaecff;
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ─── File / drop zones ─── */
+    .file-zone {
+      position: relative;
+      border: 1.5px dashed var(--border-hover);
+      border-radius: 8px;
+      padding: 1.25rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .file-zone:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .file-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+    .file-zone-text { font-size: 0.83rem; color: var(--muted); line-height: 1.6; }
+    .file-zone-text span { color: var(--accent); }
+
+    .file-chosen {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.625rem;
+      font-size: 0.82rem;
+      color: var(--success);
+    }
+    .file-chosen.show { display: flex; }
+
+    /* ─── URL input ─── */
     .input-text {
       width: 100%;
       padding: 0.6rem 0.875rem;
@@ -306,45 +328,8 @@
       font-family: inherit;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .input-text:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(92,110,245,0.12);
-    }
+    .input-text:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(92,110,245,0.12); }
     .input-text::placeholder { color: var(--muted); }
-
-    .file-zone {
-      position: relative;
-      border: 1.5px dashed var(--border-hover);
-      border-radius: 8px;
-      padding: 1.5rem;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-    }
-    .file-zone:hover {
-      border-color: var(--accent);
-      background: var(--accent-dim);
-    }
-    .file-zone input[type="file"] {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      cursor: pointer;
-      width: 100%;
-      height: 100%;
-    }
-    .file-zone-text { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
-    .file-zone-text span { color: var(--accent); }
-
-    .file-chosen {
-      display: none;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 0.625rem;
-      font-size: 0.82rem;
-      color: var(--success);
-    }
-    .file-chosen.show { display: flex; }
 
     .demo-badge {
       display: inline-flex;
@@ -358,12 +343,9 @@
       color: var(--accent-hover);
     }
 
-    .hint-text {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: 0.5rem;
-    }
+    .hint-text { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
 
+    /* ─── Permission notice ─── */
     .permission-notice {
       display: flex;
       align-items: flex-start;
@@ -378,6 +360,7 @@
     }
     .notice-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
 
+    /* ─── Start button ─── */
     .btn-start {
       width: 100%;
       max-width: 480px;
@@ -397,6 +380,7 @@
     }
     .btn-start:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(92,110,245,0.4); }
     .btn-start:active { transform: translateY(0); box-shadow: none; }
+    .btn-start:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
     .https-note {
       margin-top: 0.75rem;
@@ -417,7 +401,6 @@
       z-index: 200;
       background: linear-gradient(180deg, rgba(0,0,0,0.65) 0%, transparent 100%);
     }
-
     #ar-status-badge {
       display: flex;
       align-items: center;
@@ -428,7 +411,6 @@
       border-radius: 20px;
       border: 1px solid rgba(255,255,255,0.12);
     }
-
     .pulsedot {
       width: 7px;
       height: 7px;
@@ -437,22 +419,12 @@
       transition: background 0.4s, box-shadow 0.4s;
     }
     .pulsedot.found {
-      background: var(--success);
+      background: #0faa7e;
       box-shadow: 0 0 0 3px rgba(15,170,126,0.25);
     }
-    .pulsedot.searching {
-      animation: blink 1.2s ease-in-out infinite;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.35; }
-    }
-
-    #status-label {
-      font-size: 0.8rem;
-      color: rgba(255,255,255,0.85);
-    }
+    .pulsedot.searching { animation: blink 1.2s ease-in-out infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    #status-label { font-size: 0.8rem; color: rgba(255,255,255,0.85); }
 
     .btn-exit {
       padding: 0.4rem 0.875rem;
@@ -486,10 +458,7 @@
       pointer-events: none;
       transition: opacity 0.5s, transform 0.5s;
     }
-    #ar-tip.hidden {
-      opacity: 0;
-      transform: translateX(-50%) translateY(8px);
-    }
+    #ar-tip.hidden { opacity: 0; transform: translateX(-50%) translateY(8px); }
 
     /* ========== PRINT ========== */
     @media print {
@@ -506,19 +475,19 @@
       #print-page h2 { font-size: 1.5rem; margin-bottom: 0.5rem; }
       #print-page p { font-size: 0.9rem; color: #555; margin-bottom: 1.5rem; }
     }
-
     #print-page { display: none; }
   </style>
 </head>
 <body>
 
-  <!-- ===== A-FRAME SCENE: 静的配置（動的生成廃止） ===== -->
+  <!-- ===== A-FRAME SCENE (静的配置・Hiro デフォルト) ===== -->
   <a-scene
     vr-mode-ui="enabled: false"
     embedded
     arjs="sourceType: webcam; debugUIEnabled: false;"
     renderer="antialias: true; alpha: true; logarithmicDepthBuffer: true;"
     loading-screen="enabled: false"
+    id="main-scene"
   >
     <a-assets timeout="30000">
       <video id="ar-video"
@@ -528,24 +497,10 @@
         webkit-playsinline="true">
       </video>
     </a-assets>
-
-    <a-marker
-      id="hiro-marker"
-      preset="hiro"
-      smooth="true"
-      smoothCount="10"
-      smoothTolerance="0.01"
-      smoothThreshold="5"
-    >
-      <a-video
-        src="#ar-video"
-        width="1.6"
-        height="0.9"
-        rotation="-90 0 0"
-        position="0 0.005 0"
-      ></a-video>
+    <a-marker id="hiro-marker" preset="hiro"
+      smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
+      <a-video src="#ar-video" width="1.6" height="0.9" rotation="-90 0 0" position="0 0.005 0"></a-video>
     </a-marker>
-
     <a-entity camera ar-portrait-fix></a-entity>
   </a-scene>
 
@@ -557,8 +512,7 @@
     </div>
     <button class="btn-exit" onclick="stopAR()">✕ 終了</button>
   </div>
-
-  <div id="ar-tip">印刷したマーカーにカメラを向けてください</div>
+  <div id="ar-tip">マーカーにカメラを向けてください</div>
 
   <!-- ===== SETUP SCREEN ===== -->
   <div id="screen-setup">
@@ -570,32 +524,63 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">マーカーにカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.2.0 &nbsp;·&nbsp; 2026-04-28</span>
+      <span class="version-badge">v1.3.0 &nbsp;·&nbsp; 2026-04-28</span>
     </div>
 
     <div class="steps-container">
 
-      <!-- Step 1: Marker -->
+      <!-- ── Step 1: マーカー選択 ── -->
       <div class="step-card">
         <div class="step-head">
           <div class="step-badge">1</div>
-          <div class="step-label">マーカーを準備する</div>
+          <div class="step-label">マーカーを選択する</div>
         </div>
-        <div class="marker-row">
-          <div class="marker-thumb-wrap">
-            <img id="hiro-img" src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.5/data/images/hiro.png" alt="Hiro Marker" crossorigin="anonymous">
-          </div>
-          <div>
-            <p class="marker-desc">「Hiro」マーカーを印刷して、平らな場所に置いてください。推奨サイズは <strong>10cm × 10cm</strong> 以上です。</p>
-            <div class="btn-row">
-              <button class="btn-ghost" onclick="openPrintPage()">🖨 印刷する</button>
-              <button class="btn-ghost" onclick="downloadMarker()">⬇ DL</button>
+
+        <div class="tabs">
+          <button class="tab active" data-mtab="hiro" onclick="switchMarkerTab('hiro')">サンプル（Hiro）</button>
+          <button class="tab" data-mtab="custom" onclick="switchMarkerTab('custom')">カスタム画像</button>
+        </div>
+
+        <!-- Hiro tab -->
+        <div class="tab-body active" id="mtab-hiro">
+          <div class="marker-row">
+            <div class="marker-thumb-wrap">
+              <img id="hiro-img"
+                src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.5/data/images/hiro.png"
+                alt="Hiro Marker" crossorigin="anonymous">
             </div>
+            <div>
+              <p class="marker-desc">「Hiro」マーカーを印刷して、平らな場所に置いてください。推奨サイズは <strong>10cm × 10cm</strong> 以上です。</p>
+              <div class="btn-row">
+                <button class="btn-ghost" onclick="printHiroMarker()">🖨 印刷する</button>
+                <button class="btn-ghost" onclick="downloadMarker()">⬇ DL</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom image tab -->
+        <div class="tab-body" id="mtab-custom">
+          <div class="file-zone" id="marker-drop-zone">
+            <input type="file" id="marker-file-input" accept="image/*" onchange="handleMarkerImage(event)">
+            <div class="file-zone-text">
+              マーカーにしたい画像をドロップ<br>
+              または <span>クリックして選択</span>
+            </div>
+          </div>
+
+          <div id="marker-preview-wrap">
+            <p class="preview-label" style="margin-top:0.75rem">印刷用マーカー（黒枠付き）</p>
+            <canvas id="marker-canvas" width="200" height="200"></canvas>
+            <div class="btn-row" style="margin-top:0.6rem">
+              <button class="btn-ghost" onclick="printCustomMarker()">🖨 マーカーを印刷</button>
+            </div>
+            <p class="hint-text">この画像（黒枠ごと）を 10cm 以上で印刷してください</p>
           </div>
         </div>
       </div>
 
-      <!-- Step 2: Video source -->
+      <!-- ── Step 2: 動画選択 ── -->
       <div class="step-card">
         <div class="step-head">
           <div class="step-badge">2</div>
@@ -603,14 +588,14 @@
         </div>
 
         <div class="tabs">
-          <button class="tab active" data-tab="file" onclick="switchTab('file')">ファイルを選択</button>
-          <button class="tab" data-tab="url" onclick="switchTab('url')">URLを入力</button>
-          <button class="tab" data-tab="demo" onclick="switchTab('demo')">デモ動画を使う</button>
+          <button class="tab active" data-tab="file" onclick="switchVideoTab('file')">ファイルを選択</button>
+          <button class="tab" data-tab="url" onclick="switchVideoTab('url')">URLを入力</button>
+          <button class="tab" data-tab="demo" onclick="switchVideoTab('demo')">デモ動画を使う</button>
         </div>
 
         <div class="tab-body active" id="panel-file">
           <div class="file-zone" id="drop-zone">
-            <input type="file" id="video-file-input" accept="video/*" onchange="handleFileSelect(event)">
+            <input type="file" id="video-file-input" accept="video/*" onchange="handleVideoFile(event)">
             <div class="file-zone-text">
               動画ファイルをドロップ<br>
               または <span>クリックして選択</span>
@@ -636,7 +621,7 @@
         </div>
       </div>
 
-      <!-- Step 3: Start -->
+      <!-- ── Step 3: 開始 ── -->
       <div class="step-card">
         <div class="step-head">
           <div class="step-badge">3</div>
@@ -650,37 +635,63 @@
 
     </div>
 
-    <button class="btn-start" onclick="startAR()">カメラを起動して AR を開始 →</button>
-
+    <button class="btn-start" id="btn-start" onclick="startAR()">カメラを起動して AR を開始 →</button>
     <p class="https-note">⚠ カメラ機能は HTTPS または localhost 環境が必要です</p>
   </div>
 
-  <!-- ===== PRINT-ONLY MARKER PAGE ===== -->
+  <!-- ===== PRINT-ONLY PAGE (Hiro) ===== -->
   <div id="print-page">
     <h2>AR マーカー — Hiro</h2>
     <p>このマーカーを 10cm × 10cm 以上で印刷してください</p>
     <img src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.5/data/images/hiro.png"
          style="width:220px;height:220px;border:5px solid black;image-rendering:pixelated;"
          alt="Hiro Marker">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.2.0</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.3.0</p>
+  </div>
+
+  <!-- PRINT-ONLY: custom marker -->
+  <div id="print-custom-page" style="display:none">
+    <canvas id="print-marker-canvas" width="600" height="600"
+      style="width:220px;height:220px;display:block;"></canvas>
   </div>
 
   <script>
-    /* ─── State ─── */
-    let activeTab = 'file';
-    let videoObjectURL = null;
+    /* ══════════════════════════════════════
+       State
+    ══════════════════════════════════════ */
+    let activeVideoTab  = 'file';
+    let activeMarkerTab = 'hiro';
+    let videoObjectURL  = null;
+    let customMarkerFile = null;
+    let customPatternURL = null;   // blob URL for .patt file
+    let currentSceneType = 'hiro'; // 'hiro' | 'custom'
 
-    /* ─── Tab switching ─── */
-    function switchTab(tab) {
-      activeTab = tab;
-      document.querySelectorAll('.tab').forEach(el =>
-        el.classList.toggle('active', el.dataset.tab === tab));
-      document.querySelectorAll('.tab-body').forEach(el =>
-        el.classList.toggle('active', el.id === 'panel-' + tab));
+    /* ══════════════════════════════════════
+       Tab switching – Marker
+    ══════════════════════════════════════ */
+    function switchMarkerTab(tab) {
+      activeMarkerTab = tab;
+      document.querySelectorAll('.tab[data-mtab]').forEach(el =>
+        el.classList.toggle('active', el.dataset.mtab === tab));
+      ['hiro', 'custom'].forEach(id =>
+        document.getElementById('mtab-' + id).classList.toggle('active', id === tab));
     }
 
-    /* ─── File input ─── */
-    function handleFileSelect(e) {
+    /* ══════════════════════════════════════
+       Tab switching – Video
+    ══════════════════════════════════════ */
+    function switchVideoTab(tab) {
+      activeVideoTab = tab;
+      document.querySelectorAll('.tab[data-tab]').forEach(el =>
+        el.classList.toggle('active', el.dataset.tab === tab));
+      ['file', 'url', 'demo'].forEach(id =>
+        document.getElementById('panel-' + id).classList.toggle('active', id === tab));
+    }
+
+    /* ══════════════════════════════════════
+       Video file input
+    ══════════════════════════════════════ */
+    function handleVideoFile(e) {
       const file = e.target.files[0];
       if (!file) return;
       if (videoObjectURL) URL.revokeObjectURL(videoObjectURL);
@@ -689,7 +700,6 @@
       document.getElementById('file-chosen-info').classList.add('show');
     }
 
-    /* ─── Drag & drop ─── */
     const dropZone = document.getElementById('drop-zone');
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent)'; });
     dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = ''; });
@@ -705,31 +715,148 @@
       }
     });
 
-    /* ─── Marker download ─── */
-    function downloadMarker() {
-      const a = document.createElement('a');
-      a.href = 'https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.5/data/images/hiro.png';
-      a.download = 'hiro-marker.png';
-      a.target = '_blank';
-      a.rel = 'noopener';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+    /* ══════════════════════════════════════
+       Custom Marker Image handling
+    ══════════════════════════════════════ */
+    function handleMarkerImage(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      customMarkerFile = file;
+      customPatternURL = null; // invalidate cached patt
+      renderMarkerPreview(file);
     }
 
-    function openPrintPage() {
+    const markerDropZone = document.getElementById('marker-drop-zone');
+    markerDropZone.addEventListener('dragover', e => { e.preventDefault(); markerDropZone.style.borderColor = 'var(--accent)'; });
+    markerDropZone.addEventListener('dragleave', () => { markerDropZone.style.borderColor = ''; });
+    markerDropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      markerDropZone.style.borderColor = '';
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        customMarkerFile = file;
+        customPatternURL = null;
+        renderMarkerPreview(file);
+      }
+    });
+
+    // Draw the uploaded image WITH the AR black border onto the preview canvas
+    function renderMarkerPreview(file) {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        drawMarkerOnCanvas(img, document.getElementById('marker-canvas'), 200);
+        URL.revokeObjectURL(url);
+        document.getElementById('marker-preview-wrap').style.display = 'flex';
+      };
+      img.src = url;
+    }
+
+    // Draws image with the required black AR border onto a canvas
+    function drawMarkerOnCanvas(img, canvas, size) {
+      const ctx = canvas.getContext('2d');
+      const border = Math.round(size * 0.2); // 20% border on each side
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(border, border, size - border * 2, size - border * 2);
+      const pad = Math.round(size * 0.04);
+      ctx.drawImage(img,
+        border + pad, border + pad,
+        size - (border + pad) * 2, size - (border + pad) * 2
+      );
+    }
+
+    /* ── Generate ARToolKit .patt file from the inner image (16×16 grid, 4 rotations) ── */
+    function imageToPatternURL(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          const SIZE = 16;
+          const c = document.createElement('canvas');
+          c.width = c.height = SIZE;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, SIZE, SIZE);
+          URL.revokeObjectURL(url);
+
+          const d = ctx.getImageData(0, 0, SIZE, SIZE).data;
+          const px = (x, y, ch) => d[(y * SIZE + x) * 4 + ch];
+
+          // 4 rotations: (x,y) in OUTPUT maps to (sx,sy) in INPUT
+          const rotations = [
+            (x, y) => [x, y],
+            (x, y) => [SIZE - 1 - y, x],
+            (x, y) => [SIZE - 1 - x, SIZE - 1 - y],
+            (x, y) => [y, SIZE - 1 - x],
+          ];
+
+          let patt = `${SIZE} ${SIZE}\n`;
+          for (const rot of rotations) {
+            patt += '\n';
+            for (let ch = 0; ch < 3; ch++) {
+              for (let y = 0; y < SIZE; y++) {
+                const row = [];
+                for (let x = 0; x < SIZE; x++) {
+                  const [sx, sy] = rot(x, y);
+                  row.push(px(sx, sy, ch));
+                }
+                patt += row.join(' ') + '\n';
+              }
+            }
+          }
+
+          const blob = new Blob([patt], { type: 'text/plain' });
+          resolve(URL.createObjectURL(blob));
+        };
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
+    /* ══════════════════════════════════════
+       Marker printing
+    ══════════════════════════════════════ */
+    function printHiroMarker() {
       document.getElementById('print-page').style.display = 'flex';
       window.print();
       document.getElementById('print-page').style.display = 'none';
     }
 
-    /* ─── Resolve video source ─── */
+    function printCustomMarker() {
+      if (!customMarkerFile) return;
+      const url = URL.createObjectURL(customMarkerFile);
+      const img = new Image();
+      img.onload = () => {
+        const printCanvas = document.getElementById('print-marker-canvas');
+        drawMarkerOnCanvas(img, printCanvas, 600);
+        URL.revokeObjectURL(url);
+        document.getElementById('print-custom-page').style.display = 'flex';
+        window.print();
+        document.getElementById('print-custom-page').style.display = 'none';
+      };
+      img.src = url;
+    }
+
+    function downloadMarker() {
+      const a = document.createElement('a');
+      a.href = 'https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.5/data/images/hiro.png';
+      a.download = 'hiro-marker.png';
+      a.target = '_blank'; a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    /* ══════════════════════════════════════
+       Video source resolution
+    ══════════════════════════════════════ */
     function resolveVideoSrc() {
-      if (activeTab === 'file') {
+      if (activeVideoTab === 'file') {
         if (!videoObjectURL) { alert('動画ファイルを選択してください。'); return null; }
         return videoObjectURL;
       }
-      if (activeTab === 'url') {
+      if (activeVideoTab === 'url') {
         const v = document.getElementById('url-input').value.trim();
         if (!v) { alert('動画 URL を入力してください。'); return null; }
         return v;
@@ -737,68 +864,173 @@
       return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
     }
 
-    /* ─── Start AR ─── */
-    function startAR() {
-      const src = resolveVideoSrc();
-      if (!src) return;
-
-      // モーションセンサー許可 (iOS)
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().catch(() => {});
-      }
-
-      // 動画ソースをセット
-      const vid = document.getElementById('ar-video');
-      vid.src = src;
-      vid.load();
-      vid.play().catch(() => {});
-
-      // HUDリセット
-      const dot = document.getElementById('pulsedot');
-      dot.classList.remove('found');
-      dot.classList.add('searching');
-      document.getElementById('status-label').textContent = 'マーカーを探しています...';
-
-      // セットアップ画面を隠してAR HUDを表示
-      document.getElementById('screen-setup').style.display = 'none';
-      document.getElementById('ar-hud').style.display = 'flex';
-      const tip = document.getElementById('ar-tip');
-      tip.style.display = 'block';
-      tip.classList.remove('hidden');
-
-      attachMarkerEvents();
+    /* ══════════════════════════════════════
+       Camera video observer (call before scene rebuild)
+    ══════════════════════════════════════ */
+    function setupCameraVideoObserver() {
+      const obs = new MutationObserver(mutations => {
+        for (const m of mutations) {
+          for (const node of m.addedNodes) {
+            if (node.tagName === 'VIDEO' && !node.id) {
+              node.style.cssText = [
+                'position:fixed!important',
+                'top:0!important', 'left:0!important',
+                'width:100%!important', 'height:100%!important',
+                'object-fit:cover!important',
+                'opacity:0.01!important',
+                'z-index:0!important'
+              ].join(';');
+              obs.disconnect();
+            }
+          }
+        }
+      });
+      obs.observe(document.documentElement, { childList: true, subtree: true });
     }
 
-    /* ─── Attach marker events ─── */
+    /* ══════════════════════════════════════
+       Scene rebuild (for custom marker type)
+    ══════════════════════════════════════ */
+    function rebuildScene(markerAttrStr, videoSrc) {
+      return new Promise(resolve => {
+        const old = document.querySelector('a-scene');
+        if (old) old.remove();
+
+        setupCameraVideoObserver();
+
+        const sceneEl = document.createElement('a-scene');
+        sceneEl.setAttribute('vr-mode-ui', 'enabled: false');
+        sceneEl.setAttribute('embedded', '');
+        sceneEl.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false;');
+        sceneEl.setAttribute('renderer', 'antialias: true; alpha: true; logarithmicDepthBuffer: true;');
+        sceneEl.setAttribute('loading-screen', 'enabled: false');
+        sceneEl.id = 'main-scene';
+
+        sceneEl.innerHTML = `
+          <a-assets timeout="30000">
+            <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline
+              crossorigin="anonymous" webkit-playsinline="true"></video>
+          </a-assets>
+          <a-marker id="hiro-marker" ${markerAttrStr}
+            smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">
+            <a-video src="#ar-video" width="1.6" height="0.9" rotation="-90 0 0" position="0 0.005 0"></a-video>
+          </a-marker>
+          <a-entity camera ar-portrait-fix></a-entity>
+        `;
+
+        document.body.insertBefore(sceneEl, document.body.firstChild);
+
+        let done = false;
+        const finish = () => { if (!done) { done = true; resolve(); } };
+        sceneEl.addEventListener('loaded', finish, { once: true });
+        setTimeout(finish, 3000); // fallback
+      });
+    }
+
+    /* ══════════════════════════════════════
+       Marker events
+    ══════════════════════════════════════ */
+    let markerEventsAttached = false;
+
     function attachMarkerEvents() {
       const marker = document.getElementById('hiro-marker');
       if (!marker) { setTimeout(attachMarkerEvents, 500); return; }
-
-      // 重複登録を防ぐ
-      if (marker._arEventsAttached) return;
-      marker._arEventsAttached = true;
+      if (marker._evts) return;
+      marker._evts = true;
+      markerEventsAttached = true;
 
       marker.addEventListener('markerFound', () => {
-        const dot = document.getElementById('pulsedot');
-        dot.classList.add('found');
-        dot.classList.remove('searching');
+        document.getElementById('pulsedot').classList.replace('searching', 'found') ||
+          document.getElementById('pulsedot').classList.add('found');
+        document.getElementById('pulsedot').classList.remove('searching');
         document.getElementById('status-label').textContent = '動画を再生中';
         document.getElementById('ar-tip').classList.add('hidden');
-
-        const vid = document.getElementById('ar-video');
-        if (vid) vid.play().catch(() => {});
+        document.getElementById('ar-video')?.play().catch(() => {});
       });
 
       marker.addEventListener('markerLost', () => {
-        const dot = document.getElementById('pulsedot');
-        dot.classList.remove('found');
-        dot.classList.add('searching');
+        document.getElementById('pulsedot').classList.remove('found');
+        document.getElementById('pulsedot').classList.add('searching');
         document.getElementById('status-label').textContent = 'マーカーを探しています...';
         document.getElementById('ar-tip').classList.remove('hidden');
       });
     }
 
-    /* ─── Stop AR ─── */
+    /* ══════════════════════════════════════
+       Start AR
+    ══════════════════════════════════════ */
+    async function startAR() {
+      const videoSrc = resolveVideoSrc();
+      if (!videoSrc) return;
+
+      // Custom marker validation
+      if (activeMarkerTab === 'custom' && !customMarkerFile) {
+        alert('カスタムマーカーの画像を選択してください。');
+        return;
+      }
+
+      // iOS motion sensor
+      if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().catch(() => {});
+      }
+
+      const btn = document.getElementById('btn-start');
+      btn.disabled = true;
+      btn.textContent = '準備中...';
+
+      try {
+        if (activeMarkerTab === 'custom') {
+          // Generate .patt if not cached
+          if (!customPatternURL) {
+            customPatternURL = await imageToPatternURL(customMarkerFile);
+          }
+          // Rebuild scene if marker type changed
+          if (currentSceneType !== 'custom') {
+            await rebuildScene(`type="pattern" url="${customPatternURL}"`, videoSrc);
+            currentSceneType = 'custom';
+            markerEventsAttached = false;
+          }
+        } else {
+          // Hiro: rebuild if coming from custom
+          if (currentSceneType !== 'hiro') {
+            await rebuildScene('preset="hiro"', videoSrc);
+            currentSceneType = 'hiro';
+            markerEventsAttached = false;
+          }
+        }
+
+        // Set video source
+        const vid = document.getElementById('ar-video');
+        if (vid) {
+          vid.src = videoSrc;
+          vid.load();
+          vid.play().catch(() => {});
+        }
+
+        // Reset HUD
+        const dot = document.getElementById('pulsedot');
+        dot.classList.remove('found');
+        dot.classList.add('searching');
+        document.getElementById('status-label').textContent = 'マーカーを探しています...';
+
+        // Show AR UI
+        document.getElementById('screen-setup').style.display = 'none';
+        document.getElementById('ar-hud').style.display = 'flex';
+        const tip = document.getElementById('ar-tip');
+        tip.style.display = 'block';
+        tip.classList.remove('hidden');
+
+        if (!markerEventsAttached) setTimeout(attachMarkerEvents, 1500);
+
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'カメラを起動して AR を開始 →';
+      }
+    }
+
+    /* ══════════════════════════════════════
+       Stop AR
+    ══════════════════════════════════════ */
     function stopAR() {
       const vid = document.getElementById('ar-video');
       if (vid) { vid.pause(); vid.src = ''; }
@@ -808,7 +1040,11 @@
       document.getElementById('screen-setup').style.display = 'flex';
     }
 
-    // シーンロード後にマーカーイベントを準備
+    /* ══════════════════════════════════════
+       Init
+    ══════════════════════════════════════ */
+    setupCameraVideoObserver();
+
     document.querySelector('a-scene').addEventListener('loaded', () => {
       attachMarkerEvents();
     });
