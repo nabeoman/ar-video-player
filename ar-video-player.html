@@ -488,6 +488,27 @@
     }
     #ar-tip.hidden { opacity: 0; transform: translateX(-50%) translateY(8px); }
 
+    /* ========== DEBUG PANEL ========== */
+    #debug-panel {
+      position: fixed;
+      bottom: 5.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 300;
+      display: none;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 0.6rem 1rem;
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.9);
+      font-family: 'Menlo', 'Monaco', monospace;
+      white-space: pre;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+
     /* ========== PRINT ========== */
     @media print {
       #screen-setup, #ar-hud, #ar-tip { display: none !important; }
@@ -518,6 +539,7 @@
     <button class="btn-exit" onclick="stopAR()">✕ 終了</button>
   </div>
   <div id="ar-tip">画像にカメラを向けてください</div>
+  <div id="debug-panel"></div>
 
   <!-- ===== SETUP SCREEN ===== -->
   <div id="screen-setup">
@@ -529,7 +551,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.4.6 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.4.7 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -957,14 +979,32 @@
         const scene = await rebuildScene(videoSrc);
 
         // シーン初期化後、videoWidth が取得できるまでポーリングしてアスペクト比を適用
+        const dbg = document.getElementById('debug-panel');
+        dbg.style.display = 'block';
         (function applyRatio(n) {
-          if (!scene.isConnected) return;
+          if (!scene.isConnected) { dbg.style.display = 'none'; return; }
           const vid = scene.querySelector('#ar-video');
           const aVid = scene.querySelector('a-video');
+          const vw = vid ? vid.videoWidth : '?';
+          const vh = vid ? vid.videoHeight : '?';
+          const curH = aVid ? aVid.getAttribute('height') : '?';
+          dbg.textContent =
+            `[try ${n+1}/20]\n` +
+            `video  : ${vw} × ${vh}px\n` +
+            `ratio  : ${(vw > 0 && vh > 0) ? (vh/vw).toFixed(4) : 'pending'}\n` +
+            `a-video: width=1  height=${curH}`;
           if (vid && aVid && vid.videoWidth > 0) {
-            aVid.setAttribute('height', vid.videoHeight / vid.videoWidth);
-          } else if (n < 20) {
+            const ratio = vid.videoHeight / vid.videoWidth;
+            aVid.setAttribute('height', ratio);
+            dbg.textContent =
+              `[OK  try ${n+1}/20]\n` +
+              `video  : ${vid.videoWidth} × ${vid.videoHeight}px\n` +
+              `ratio  : ${ratio.toFixed(4)}\n` +
+              `a-video: width=1  height=${ratio.toFixed(4)}`;
+          } else if (n < 19) {
             setTimeout(() => applyRatio(n + 1), 250);
+          } else {
+            dbg.textContent += '\n[WARN] videoWidth 取得失敗 → height 未変更';
           }
         })(0);
 
@@ -1015,6 +1055,7 @@
       arStarted = false;
       document.getElementById('ar-hud').style.display = 'none';
       document.getElementById('ar-tip').style.display = 'none';
+      document.getElementById('debug-panel').style.display = 'none';
       document.getElementById('screen-setup').style.display = 'flex';
     }
   </script>
