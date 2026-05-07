@@ -429,6 +429,16 @@
       z-index: 200;
       background: linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 100%);
     }
+    #ar-status-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      padding: 1rem 1.25rem;
+      display: none;
+      justify-content: flex-start;
+      align-items: center;
+      z-index: 200;
+      background: linear-gradient(180deg, rgba(0,0,0,0.65) 0%, transparent 100%);
+    }
     #ar-status-badge {
       display: flex;
       align-items: center;
@@ -557,7 +567,7 @@
 
     /* ========== PRINT ========== */
     @media print {
-      #screen-setup, #ar-hud, #ar-tip { display: none !important; }
+      #screen-setup, #ar-status-bar, #ar-hud, #ar-tip { display: none !important; }
       #print-page {
         display: flex !important;
         flex-direction: column;
@@ -577,12 +587,15 @@
 <body>
 
   <!-- ===== AR HUD ===== -->
-  <div id="ar-hud">
+  <div id="ar-status-bar">
     <div id="ar-status-badge">
       <div class="pulsedot searching" id="pulsedot"></div>
       <span id="status-label">マーカーを探しています...</span>
     </div>
-    <div style="display:flex;gap:0.5rem;align-items:center;">
+  </div>
+
+  <div id="ar-hud">
+    <div style="display:flex;gap:0.5rem;align-items:center;margin-left:auto;">
       <button class="btn-exit" id="btn-audio-toggle" onclick="toggleAudio()">
         <svg id="icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -656,7 +669,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.6.0 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.6.1 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -1222,6 +1235,7 @@
         dot.className = 'pulsedot searching';
         document.getElementById('status-label').textContent = '画像を探しています...';
         document.getElementById('screen-setup').style.display = 'none';
+        document.getElementById('ar-status-bar').style.display = 'flex';
         document.getElementById('ar-hud').style.display = 'flex';
         _audioEnabled = true;
         document.getElementById('icon-sound-on').style.display = '';
@@ -1244,6 +1258,7 @@
         const failedScene = document.querySelector('a-scene');
         if (failedScene) failedScene.remove();
         document.getElementById('screen-setup').style.display = 'flex';
+        document.getElementById('ar-status-bar').style.display = 'none';
         document.getElementById('ar-hud').style.display = 'none';
         document.getElementById('ar-tip').style.display = 'none';
         alert('AR の起動に失敗しました。もう一度お試しください。\n' + e.message);
@@ -1343,6 +1358,7 @@
       document.getElementById('yt-overlay').style.display = 'none';
       document.getElementById('yt-iframe').src = '';
       document.getElementById('btn-debug-toggle').style.display = '';
+      document.getElementById('ar-status-bar').style.display = 'none';
       document.getElementById('ar-hud').style.display = 'none';
       document.getElementById('ar-tip').style.display = 'none';
       document.getElementById('debug-panel').style.display = 'none';
