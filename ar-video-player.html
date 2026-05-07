@@ -595,7 +595,16 @@
   </div>
 
   <div id="ar-hud">
-    <div style="display:flex;gap:0.5rem;align-items:center;margin-left:auto;">
+    <div>
+      <button class="btn-exit" id="btn-rescan" onclick="rescanMarker()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
+          <polyline points="1 4 1 10 7 10"></polyline>
+          <path d="M3.51 15a9 9 0 1 0 .49-4.95"></path>
+        </svg>
+        再確認
+      </button>
+    </div>
+    <div style="display:flex;gap:0.5rem;align-items:center;">
       <button class="btn-exit" id="btn-audio-toggle" onclick="toggleAudio()">
         <svg id="icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -669,7 +678,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.6.1 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.6.2 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -1271,6 +1280,34 @@
     /* ══════════════════════════════════════
        Debug panel toggle
     ══════════════════════════════════════ */
+    function rescanMarker() {
+      const scene = document.getElementById('main-scene');
+      if (!scene) return;
+      const system = scene.systems['mindar-image-system'];
+      if (!system) return;
+
+      _markerVisible = false;
+      _userPaused = false;
+      const vid = document.getElementById('ar-video');
+      if (vid) { vid.pause(); vid.muted = true; }
+
+      const dot = document.getElementById('pulsedot');
+      dot.classList.remove('found');
+      dot.classList.add('searching');
+      document.getElementById('status-label').textContent = '再確認中...';
+      document.getElementById('ar-tip').classList.remove('hidden');
+
+      const btn = document.getElementById('btn-rescan');
+      btn.disabled = true;
+
+      system.stop();
+      setTimeout(() => {
+        system.start();
+        document.getElementById('status-label').textContent = '画像を探しています...';
+        btn.disabled = false;
+      }, 600);
+    }
+
     function handleArTap(e) {
       if (!_markerVisible || _ytVideoId) return;
       if (e.target.closest('button')) return;
