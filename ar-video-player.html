@@ -643,7 +643,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.5.4 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.5.5 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -801,22 +801,26 @@
     // MindAR v1.2.x はコンパイル時に座標空間がピクセル比率より約 7% 大きくなるため補正
     const MINDAR_HEIGHT_CORRECTION = 1.071;
 
+    function getAdjustKey() {
+      return 'ar-adjust-' + activeVideoTab; // 'ar-adjust-file' / 'ar-adjust-url' / 'ar-adjust-demo'
+    }
+
     function loadSavedAdjust() {
       try {
-        const s = localStorage.getItem('ar-adjust');
+        const s = localStorage.getItem(getAdjustKey());
         return s ? JSON.parse(s) : null;
       } catch(e) { return null; }
     }
 
     function saveAdjust() {
-      localStorage.setItem('ar-adjust', JSON.stringify({ h: _dbgH, y: _dbgY }));
+      localStorage.setItem(getAdjustKey(), JSON.stringify({ h: _dbgH, y: _dbgY }));
       const msg = document.getElementById('dc-saved-msg');
       msg.style.display = 'block';
       setTimeout(() => { msg.style.display = 'none'; }, 2000);
     }
 
     function resetAdjust() {
-      localStorage.removeItem('ar-adjust');
+      localStorage.removeItem(getAdjustKey());
       const aVid = _dbgScene && _dbgScene.querySelector('a-video');
       if (aVid) {
         const baseH = parseFloat(document.getElementById('debug-info').dataset.baseH || _dbgH);
