@@ -529,7 +529,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.4.4 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.4.5 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -815,30 +815,9 @@
     }
 
     /* ══════════════════════════════════════
-       Video aspect ratio detection
-    ══════════════════════════════════════ */
-    function getVideoAspectRatio(src) {
-      return new Promise(resolve => {
-        const tmp = document.createElement('video');
-        tmp.preload = 'metadata';
-        tmp.crossOrigin = 'anonymous';
-        const fallback = 9 / 16;
-        const done = ratio => { tmp.src = ''; resolve(ratio); };
-        const timer = setTimeout(() => done(fallback), 5000);
-        tmp.onloadedmetadata = () => {
-          clearTimeout(timer);
-          done(tmp.videoWidth > 0 ? tmp.videoHeight / tmp.videoWidth : fallback);
-        };
-        tmp.onerror = () => { clearTimeout(timer); done(fallback); };
-        tmp.src = src;
-        tmp.load();
-      });
-    }
-
-    /* ══════════════════════════════════════
        Scene rebuild
     ══════════════════════════════════════ */
-    function rebuildScene(videoSrc, aspectRatio) {
+    function rebuildScene(videoSrc) {
       return new Promise(resolve => {
         const old = document.querySelector('a-scene');
         if (old) old.remove();
@@ -861,11 +840,23 @@
           </a-assets>
           <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
           <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
-            <a-video src="#ar-video" width="1" height="${aspectRatio}" position="0 0 0.001"></a-video>
+            <a-video src="#ar-video" width="1" height="0.5625" position="0 0 0.001"></a-video>
           </a-entity>
         `;
 
         document.body.insertBefore(scene, document.body.firstChild);
+
+        // AR シーン内の video の loadedmetadata で実際の比率に更新する
+        const vidEl = scene.querySelector('#ar-video');
+        if (vidEl) {
+          vidEl.addEventListener('loadedmetadata', () => {
+            if (vidEl.videoWidth > 0) {
+              const ratio = vidEl.videoHeight / vidEl.videoWidth;
+              const aVid = scene.querySelector('a-video');
+              if (aVid) aVid.setAttribute('height', ratio);
+            }
+          }, { once: true });
+        }
 
         let done = false;
         const finish = () => { if (!done) { done = true; resolve(scene); } };
@@ -919,6 +910,7 @@
 
       const btn = document.getElementById('btn-start');
       btn.disabled = true;
+      let dotTimer = null;
 
       try {
         // ── Step A: カメラストリーム取得（iOS ユーザー操作コンテキスト必須）──
@@ -952,7 +944,7 @@
 
         if (!compiledMindBuffer || compiledMindKey !== sourceKey) {
           btn.textContent = '画像を解析中...';
-          let dotTimer = setInterval(() => {
+          dotTimer = setInterval(() => {
             const dots = (btn.textContent.match(/\.+$/) || [''])[0];
             btn.textContent = '画像を解析中' + (dots.length >= 3 ? '.' : dots + '.');
           }, 500);
@@ -965,6 +957,7 @@
 
           compiledMindBuffer = await compileTargetImage(imgEl, () => {});
           clearInterval(dotTimer);
+          dotTimer = null;
           compiledMindKey = sourceKey;
         }
 
@@ -972,10 +965,8 @@
         window._mindARBuffer = compiledMindBuffer;
 
         // ── Step C: シーン構築 ──
-        btn.textContent = '動画を解析中...';
-        const aspectRatio = await getVideoAspectRatio(videoSrc);
         btn.textContent = 'AR を初期化中...';
-        const scene = await rebuildScene(videoSrc, aspectRatio);
+        const scene = await rebuildScene(videoSrc);
 
         // ── Step D: HUD 表示 ──
         // autoStart: true（デフォルト）により MindAR はシーン挿入時に自動起動する。
@@ -994,6 +985,7 @@
         setTimeout(attachTargetEvents, 1000);
 
       } catch (e) {
+        if (dotTimer) { clearInterval(dotTimer); dotTimer = null; }
         console.error('AR start error:', e);
         // 失敗時: 途中で挿入されたシーンを除去してセットアップ画面を復元
         const failedScene = document.querySelector('a-scene');
