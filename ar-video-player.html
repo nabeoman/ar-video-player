@@ -680,7 +680,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.6.3 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.6.4 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -1304,9 +1304,9 @@
 
       system.stop();
       setTimeout(() => {
-        system.start();
         document.getElementById('status-label').textContent = '画像を探しています...';
         btn.disabled = false;
+        system.start(); // 最後に呼ぶ: targetFound が同期発火しても status を上書きできる
       }, 600);
     }
 
