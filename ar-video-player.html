@@ -467,6 +467,7 @@
       font-family: inherit;
     }
     .btn-exit:hover { background: rgba(255,255,255,0.18); }
+    .btn-exit.active { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.4); }
 
     #ar-tip {
       position: fixed;
@@ -551,7 +552,17 @@
       <div class="pulsedot searching" id="pulsedot"></div>
       <span id="status-label">マーカーを探しています...</span>
     </div>
-    <button class="btn-exit" onclick="stopAR()">✕ 終了</button>
+    <div style="display:flex;gap:0.5rem;align-items:center;">
+      <button class="btn-exit" id="btn-debug-toggle" onclick="toggleDebug()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="vertical-align:-1px">
+          <line x1="4" y1="6" x2="20" y2="6"/><circle cx="10" cy="6" r="2.5" fill="currentColor" stroke="none"/>
+          <line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2.5" fill="currentColor" stroke="none"/>
+          <line x1="4" y1="18" x2="20" y2="18"/><circle cx="10" cy="18" r="2.5" fill="currentColor" stroke="none"/>
+        </svg>
+        調整
+      </button>
+      <button class="btn-exit" onclick="stopAR()">✕ 終了</button>
+    </div>
   </div>
   <div id="ar-tip">画像にカメラを向けてください</div>
   <div id="debug-panel">
@@ -582,7 +593,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.4.9 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.5.0 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -1015,7 +1026,6 @@
         // シーン初期化後、videoWidth が取得できるまでポーリングしてアスペクト比を適用
         const dbg = document.getElementById('debug-panel');
         const dbgInfo = document.getElementById('debug-info');
-        dbg.style.display = 'block';
         _dbgScene = scene;
         _dbgY = -0.06;
         document.getElementById('dc-y-val').textContent = '-0.0600';
@@ -1076,6 +1086,17 @@
     }
 
     /* ══════════════════════════════════════
+       Debug panel toggle
+    ══════════════════════════════════════ */
+    function toggleDebug() {
+      const dbg = document.getElementById('debug-panel');
+      const btn = document.getElementById('btn-debug-toggle');
+      const isOpen = dbg.style.display === 'block';
+      dbg.style.display = isOpen ? 'none' : 'block';
+      btn.classList.toggle('active', !isOpen);
+    }
+
+    /* ══════════════════════════════════════
        Debug adjustment controls
     ══════════════════════════════════════ */
     function adjH(delta) {
@@ -1111,6 +1132,7 @@
       document.getElementById('ar-hud').style.display = 'none';
       document.getElementById('ar-tip').style.display = 'none';
       document.getElementById('debug-panel').style.display = 'none';
+      document.getElementById('btn-debug-toggle').classList.remove('active');
       document.getElementById('screen-setup').style.display = 'flex';
     }
   </script>
