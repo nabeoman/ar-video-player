@@ -582,7 +582,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.4.8 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.4.9 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -896,7 +896,7 @@
           </a-assets>
           <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
           <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
-            <a-video src="#ar-video" width="1" height="0.5625" position="0 0 0.001"></a-video>
+            <a-video src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001"></a-video>
           </a-entity>
         `;
 
@@ -1017,8 +1017,8 @@
         const dbgInfo = document.getElementById('debug-info');
         dbg.style.display = 'block';
         _dbgScene = scene;
-        _dbgY = 0;
-        document.getElementById('dc-y-val').textContent = '0.0000';
+        _dbgY = -0.06;
+        document.getElementById('dc-y-val').textContent = '-0.0600';
         (function applyRatio(n) {
           if (!scene.isConnected) { dbg.style.display = 'none'; return; }
           const vid = scene.querySelector('#ar-video');
