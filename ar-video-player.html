@@ -580,6 +580,11 @@
         <span class="dc-val" id="dc-y-val">0.00</span>
         <button class="dc-btn" onclick="adjY(+0.02)">+</button>
       </div>
+      <div class="dc-row" style="margin-top:0.35rem;justify-content:space-between;">
+        <button class="dc-btn" style="flex:1;background:rgba(92,110,245,0.35);border-color:rgba(92,110,245,0.6)" onclick="saveAdjust()">保存</button>
+        <button class="dc-btn" style="flex:1;margin-left:0.4rem;background:rgba(255,80,80,0.25);border-color:rgba(255,80,80,0.4)" onclick="resetAdjust()">リセット</button>
+      </div>
+      <div id="dc-saved-msg" style="font-size:0.7rem;color:rgba(92,245,150,0.85);text-align:center;display:none;margin-top:0.25rem">✓ 保存しました</div>
     </div>
   </div>
 
@@ -593,7 +598,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.5.0 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.5.1 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -737,6 +742,37 @@
     let _dbgScene = null;
     let _dbgH     = 9 / 16;
     let _dbgY     = 0;
+
+    // MindAR v1.2.x はコンパイル時に座標空間がピクセル比率より約 7% 大きくなるため補正
+    const MINDAR_HEIGHT_CORRECTION = 1.071;
+
+    function loadSavedAdjust() {
+      try {
+        const s = localStorage.getItem('ar-adjust');
+        return s ? JSON.parse(s) : null;
+      } catch(e) { return null; }
+    }
+
+    function saveAdjust() {
+      localStorage.setItem('ar-adjust', JSON.stringify({ h: _dbgH, y: _dbgY }));
+      const msg = document.getElementById('dc-saved-msg');
+      msg.style.display = 'block';
+      setTimeout(() => { msg.style.display = 'none'; }, 2000);
+    }
+
+    function resetAdjust() {
+      localStorage.removeItem('ar-adjust');
+      const aVid = _dbgScene && _dbgScene.querySelector('a-video');
+      if (aVid) {
+        const baseH = parseFloat(document.getElementById('debug-info').dataset.baseH || _dbgH);
+        aVid.setAttribute('height', baseH);
+        aVid.setAttribute('position', `0 -0.06 0.001`);
+      }
+      _dbgH = parseFloat(document.getElementById('debug-info').dataset.baseH || _dbgH);
+      _dbgY = -0.06;
+      document.getElementById('dc-h-val').textContent = _dbgH.toFixed(4);
+      document.getElementById('dc-y-val').textContent = '-0.0600';
+    }
 
     /* ══════════════════════════════════════
        Tab switching
@@ -1034,15 +1070,22 @@
           const vid = scene.querySelector('#ar-video');
           const aVid = scene.querySelector('a-video');
           if (vid && aVid && vid.videoWidth > 0) {
-            const ratio = vid.videoHeight / vid.videoWidth;
-            aVid.setAttribute('height', ratio);
-            _dbgH = ratio;
-            document.getElementById('dc-h-val').textContent = ratio.toFixed(4);
+            const pixelRatio = vid.videoHeight / vid.videoWidth;
+            const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
+            const saved = loadSavedAdjust();
+            _dbgH = saved ? saved.h : corrected;
+            _dbgY = saved ? saved.y : -0.06;
+            aVid.setAttribute('height', _dbgH);
+            aVid.setAttribute('position', `0 ${_dbgY} 0.001`);
+            document.getElementById('dc-h-val').textContent = _dbgH.toFixed(4);
+            document.getElementById('dc-y-val').textContent = _dbgY.toFixed(4);
+            dbgInfo.dataset.baseH = corrected.toFixed(4);
             dbgInfo.textContent =
-              `[OK try ${n+1}]\n` +
+              `[OK try ${n+1}]${saved ? ' (保存済)' : ''}\n` +
               `video  : ${vid.videoWidth} × ${vid.videoHeight}px\n` +
-              `ratio  : ${ratio.toFixed(4)}\n` +
-              `a-video: w=1  h=${ratio.toFixed(4)}`;
+              `pixel ratio : ${pixelRatio.toFixed(4)}\n` +
+              `補正後 ratio : ${corrected.toFixed(4)}\n` +
+              `適用 h=${_dbgH.toFixed(4)}  y=${_dbgY.toFixed(4)}`;
           } else if (n < 19) {
             dbgInfo.textContent =
               `[try ${n+1}/20] 取得中...\n` +
