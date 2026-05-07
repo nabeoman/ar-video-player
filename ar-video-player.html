@@ -529,7 +529,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.4.5 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.4.6 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -846,18 +846,6 @@
 
         document.body.insertBefore(scene, document.body.firstChild);
 
-        // AR シーン内の video の loadedmetadata で実際の比率に更新する
-        const vidEl = scene.querySelector('#ar-video');
-        if (vidEl) {
-          vidEl.addEventListener('loadedmetadata', () => {
-            if (vidEl.videoWidth > 0) {
-              const ratio = vidEl.videoHeight / vidEl.videoWidth;
-              const aVid = scene.querySelector('a-video');
-              if (aVid) aVid.setAttribute('height', ratio);
-            }
-          }, { once: true });
-        }
-
         let done = false;
         const finish = () => { if (!done) { done = true; resolve(scene); } };
         scene.addEventListener('loaded', finish, { once: true });
@@ -967,6 +955,18 @@
         // ── Step C: シーン構築 ──
         btn.textContent = 'AR を初期化中...';
         const scene = await rebuildScene(videoSrc);
+
+        // シーン初期化後、videoWidth が取得できるまでポーリングしてアスペクト比を適用
+        (function applyRatio(n) {
+          if (!scene.isConnected) return;
+          const vid = scene.querySelector('#ar-video');
+          const aVid = scene.querySelector('a-video');
+          if (vid && aVid && vid.videoWidth > 0) {
+            aVid.setAttribute('height', vid.videoHeight / vid.videoWidth);
+          } else if (n < 20) {
+            setTimeout(() => applyRatio(n + 1), 250);
+          }
+        })(0);
 
         // ── Step D: HUD 表示 ──
         // autoStart: true（デフォルト）により MindAR はシーン挿入時に自動起動する。
