@@ -496,17 +496,32 @@
       transform: translateX(-50%);
       z-index: 300;
       display: none;
-      background: rgba(0,0,0,0.75);
+      background: rgba(0,0,0,0.78);
       backdrop-filter: blur(8px);
       border: 1px solid rgba(255,255,255,0.15);
       border-radius: 10px;
-      padding: 0.6rem 1rem;
+      padding: 0.6rem 1rem 0.7rem;
       font-size: 0.75rem;
       color: rgba(255,255,255,0.9);
       font-family: 'Menlo', 'Monaco', monospace;
-      white-space: pre;
       line-height: 1.6;
-      pointer-events: none;
+      min-width: 230px;
+    }
+    #debug-info { white-space: pre; pointer-events: none; margin-bottom: 0.5rem; }
+    #debug-ctrl {
+      display: flex; flex-direction: column; gap: 0.25rem;
+      border-top: 1px solid rgba(255,255,255,0.15);
+      padding-top: 0.45rem;
+    }
+    .dc-row { display: flex; align-items: center; gap: 0.4rem; }
+    .dc-label { width: 3.5rem; color: rgba(255,255,255,0.5); font-size: 0.7rem; }
+    .dc-val { min-width: 4.2rem; text-align: center; }
+    .dc-btn {
+      background: rgba(255,255,255,0.13);
+      border: 1px solid rgba(255,255,255,0.22);
+      color: white; border-radius: 4px;
+      padding: 0.1rem 0.6rem; font-size: 0.82rem;
+      cursor: pointer; font-family: monospace; line-height: 1.4;
     }
 
     /* ========== PRINT ========== */
@@ -539,7 +554,23 @@
     <button class="btn-exit" onclick="stopAR()">✕ 終了</button>
   </div>
   <div id="ar-tip">画像にカメラを向けてください</div>
-  <div id="debug-panel"></div>
+  <div id="debug-panel">
+    <div id="debug-info"></div>
+    <div id="debug-ctrl">
+      <div class="dc-row">
+        <span class="dc-label">height</span>
+        <button class="dc-btn" onclick="adjH(-0.05)">−</button>
+        <span class="dc-val" id="dc-h-val">—</span>
+        <button class="dc-btn" onclick="adjH(+0.05)">+</button>
+      </div>
+      <div class="dc-row">
+        <span class="dc-label">posY</span>
+        <button class="dc-btn" onclick="adjY(-0.02)">−</button>
+        <span class="dc-val" id="dc-y-val">0.00</span>
+        <button class="dc-btn" onclick="adjY(+0.02)">+</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== SETUP SCREEN ===== -->
   <div id="screen-setup">
@@ -551,7 +582,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.4.7 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.4.8 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -692,6 +723,9 @@
     let compiledMindBuffer = null;  // ArrayBuffer（fetch interceptor経由でMindARに渡す）
     let compiledMindKey    = null;  // キャッシュキー（変化時だけ再コンパイル）
     let arStarted          = false;
+    let _dbgScene = null;
+    let _dbgH     = 9 / 16;
+    let _dbgY     = 0;
 
     /* ══════════════════════════════════════
        Tab switching
@@ -980,31 +1014,32 @@
 
         // シーン初期化後、videoWidth が取得できるまでポーリングしてアスペクト比を適用
         const dbg = document.getElementById('debug-panel');
+        const dbgInfo = document.getElementById('debug-info');
         dbg.style.display = 'block';
+        _dbgScene = scene;
+        _dbgY = 0;
+        document.getElementById('dc-y-val').textContent = '0.0000';
         (function applyRatio(n) {
           if (!scene.isConnected) { dbg.style.display = 'none'; return; }
           const vid = scene.querySelector('#ar-video');
           const aVid = scene.querySelector('a-video');
-          const vw = vid ? vid.videoWidth : '?';
-          const vh = vid ? vid.videoHeight : '?';
-          const curH = aVid ? aVid.getAttribute('height') : '?';
-          dbg.textContent =
-            `[try ${n+1}/20]\n` +
-            `video  : ${vw} × ${vh}px\n` +
-            `ratio  : ${(vw > 0 && vh > 0) ? (vh/vw).toFixed(4) : 'pending'}\n` +
-            `a-video: width=1  height=${curH}`;
           if (vid && aVid && vid.videoWidth > 0) {
             const ratio = vid.videoHeight / vid.videoWidth;
             aVid.setAttribute('height', ratio);
-            dbg.textContent =
-              `[OK  try ${n+1}/20]\n` +
+            _dbgH = ratio;
+            document.getElementById('dc-h-val').textContent = ratio.toFixed(4);
+            dbgInfo.textContent =
+              `[OK try ${n+1}]\n` +
               `video  : ${vid.videoWidth} × ${vid.videoHeight}px\n` +
               `ratio  : ${ratio.toFixed(4)}\n` +
-              `a-video: width=1  height=${ratio.toFixed(4)}`;
+              `a-video: w=1  h=${ratio.toFixed(4)}`;
           } else if (n < 19) {
+            dbgInfo.textContent =
+              `[try ${n+1}/20] 取得中...\n` +
+              `video  : ${vid ? vid.videoWidth : '?'} × ${vid ? vid.videoHeight : '?'}px`;
             setTimeout(() => applyRatio(n + 1), 250);
           } else {
-            dbg.textContent += '\n[WARN] videoWidth 取得失敗 → height 未変更';
+            dbgInfo.textContent = `[WARN] videoWidth 取得失敗\nheight 未変更 (0.5625)`;
           }
         })(0);
 
@@ -1041,6 +1076,25 @@
     }
 
     /* ══════════════════════════════════════
+       Debug adjustment controls
+    ══════════════════════════════════════ */
+    function adjH(delta) {
+      _dbgH = +Math.max(0.05, _dbgH + delta).toFixed(4);
+      const aVid = _dbgScene && _dbgScene.querySelector('a-video');
+      if (aVid) aVid.setAttribute('height', _dbgH);
+      const el = document.getElementById('dc-h-val');
+      if (el) el.textContent = _dbgH.toFixed(4);
+    }
+
+    function adjY(delta) {
+      _dbgY = +(_dbgY + delta).toFixed(4);
+      const aVid = _dbgScene && _dbgScene.querySelector('a-video');
+      if (aVid) aVid.setAttribute('position', `0 ${_dbgY} 0.001`);
+      const el = document.getElementById('dc-y-val');
+      if (el) el.textContent = _dbgY.toFixed(4);
+    }
+
+    /* ══════════════════════════════════════
        Stop AR
     ══════════════════════════════════════ */
     function stopAR() {
@@ -1053,6 +1107,7 @@
       if (vid) { vid.pause(); }
 
       arStarted = false;
+      _dbgScene = null;
       document.getElementById('ar-hud').style.display = 'none';
       document.getElementById('ar-tip').style.display = 'none';
       document.getElementById('debug-panel').style.display = 'none';
