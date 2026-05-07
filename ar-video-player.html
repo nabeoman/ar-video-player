@@ -525,6 +525,36 @@
       cursor: pointer; font-family: monospace; line-height: 1.4;
     }
 
+    /* ========== YOUTUBE OVERLAY ========== */
+    #yt-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 150;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.65);
+    }
+    #yt-frame-wrap {
+      position: relative;
+      height: 80vh;
+      aspect-ratio: 16/9;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    #yt-frame-wrap.shorts {
+      height: 82vh;
+      aspect-ratio: 9/16;
+    }
+    #yt-iframe { width: 100%; height: 100%; border: none; }
+    #yt-tip {
+      margin-top: 0.75rem;
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.6);
+    }
+
     /* ========== PRINT ========== */
     @media print {
       #screen-setup, #ar-hud, #ar-tip { display: none !important; }
@@ -565,6 +595,15 @@
     </div>
   </div>
   <div id="ar-tip">画像にカメラを向けてください</div>
+
+  <!-- ===== YOUTUBE OVERLAY ===== -->
+  <div id="yt-overlay">
+    <div id="yt-frame-wrap">
+      <iframe id="yt-iframe" allowfullscreen
+        allow="autoplay; encrypted-media; picture-in-picture; web-share"></iframe>
+    </div>
+    <p id="yt-tip">マーカーから外すと停止します</p>
+  </div>
   <div id="debug-panel">
     <div id="debug-info"></div>
     <div id="debug-ctrl">
@@ -604,7 +643,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.5.2 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.5.3 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -687,8 +726,9 @@
         </div>
 
         <div class="tab-body" id="panel-url">
-          <input class="input-text" type="url" id="url-input" placeholder="https://example.com/video.mp4">
-          <p class="hint-text">※ CORS対応のURLを入力してください</p>
+          <input class="input-text" type="url" id="url-input" placeholder="https://example.com/video.mp4  または YouTube URL">
+          <p class="hint-text">YouTube URL（通常・ショート・限定公開）または CORS 対応の直接 MP4 URL を入力できます</p>
+          <p class="hint-text" style="margin-top:0.3rem;color:#5c6ef5">YouTube は画面オーバーレイで再生されます（3D追従なし）</p>
         </div>
 
         <div class="tab-body" id="panel-demo">
@@ -749,6 +789,14 @@
     let _dbgH       = 9 / 16;
     let _dbgY       = 0;
     let _dbgOpacity = 1.0;
+    let _ytVideoId  = null;
+    let _ytShorts   = false;
+
+    function extractYouTubeID(url) {
+      if (!url) return null;
+      const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|shorts\/|embed\/))([^?&\s]+)/);
+      return m ? m[1] : null;
+    }
 
     // MindAR v1.2.x はコンパイル時に座標空間がピクセル比率より約 7% 大きくなるため補正
     const MINDAR_HEIGHT_CORRECTION = 1.071;
@@ -943,16 +991,23 @@
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
         scene.id = 'main-scene';
 
-        scene.innerHTML = `
-          <a-assets timeout="30000">
-            <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline
-              crossorigin="anonymous" webkit-playsinline="true"></video>
-          </a-assets>
-          <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-          <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
-            <a-video src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001"></a-video>
-          </a-entity>
-        `;
+        if (_ytVideoId) {
+          scene.innerHTML = `
+            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+            <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
+          `;
+        } else {
+          scene.innerHTML = `
+            <a-assets timeout="30000">
+              <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline
+                crossorigin="anonymous" webkit-playsinline="true"></video>
+            </a-assets>
+            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+            <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+              <a-video src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001"></a-video>
+            </a-entity>
+          `;
+        }
 
         document.body.insertBefore(scene, document.body.firstChild);
 
@@ -978,7 +1033,16 @@
         dot.classList.add('found');
         document.getElementById('status-label').textContent = '動画を再生中';
         document.getElementById('ar-tip').classList.add('hidden');
-        document.getElementById('ar-video')?.play().catch(() => {});
+        if (_ytVideoId) {
+          const wrap = document.getElementById('yt-frame-wrap');
+          const iframe = document.getElementById('yt-iframe');
+          const overlay = document.getElementById('yt-overlay');
+          wrap.className = _ytShorts ? 'shorts' : '';
+          iframe.src = `https://www.youtube.com/embed/${_ytVideoId}?autoplay=1&mute=1&playsinline=1&controls=1&loop=1&playlist=${_ytVideoId}`;
+          overlay.style.display = 'flex';
+        } else {
+          document.getElementById('ar-video')?.play().catch(() => {});
+        }
       });
 
       target.addEventListener('targetLost', () => {
@@ -987,6 +1051,10 @@
         dot.classList.add('searching');
         document.getElementById('status-label').textContent = '画像を探しています...';
         document.getElementById('ar-tip').classList.remove('hidden');
+        if (_ytVideoId) {
+          document.getElementById('yt-overlay').style.display = 'none';
+          document.getElementById('yt-iframe').src = '';
+        }
       });
     }
 
@@ -996,6 +1064,8 @@
     async function startAR() {
       const videoSrc = resolveVideoSrc();
       if (!videoSrc) return;
+      _ytVideoId = extractYouTubeID(videoSrc);
+      _ytShorts  = _ytVideoId ? /youtube\.com\/shorts\//.test(videoSrc) : false;
 
       if (activeMarkerTab === 'custom' && !customImageFile) {
         alert('ターゲット画像を選択してください。');
@@ -1066,9 +1136,17 @@
         btn.textContent = 'AR を初期化中...';
         const scene = await rebuildScene(videoSrc);
 
+        // YouTube モードは 3D video 不要のため比率適用をスキップ
+        if (_ytVideoId) {
+          document.getElementById('debug-panel').style.display = 'none';
+          document.getElementById('btn-debug-toggle').style.display = 'none';
+        }
+
         // シーン初期化後、videoWidth が取得できるまでポーリングしてアスペクト比を適用
         const dbg = document.getElementById('debug-panel');
         const dbgInfo = document.getElementById('debug-info');
+        if (_ytVideoId) return; // YouTube モードはここで終了
+
         _dbgScene = scene;
         _dbgY = -0.06;
         _dbgOpacity = 1.0;
@@ -1193,6 +1271,11 @@
       arStarted = false;
       _dbgScene = null;
       _dbgOpacity = 1.0;
+      _ytVideoId = null;
+      _ytShorts  = false;
+      document.getElementById('yt-overlay').style.display = 'none';
+      document.getElementById('yt-iframe').src = '';
+      document.getElementById('btn-debug-toggle').style.display = '';
       document.getElementById('ar-hud').style.display = 'none';
       document.getElementById('ar-tip').style.display = 'none';
       document.getElementById('debug-panel').style.display = 'none';
