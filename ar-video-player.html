@@ -643,7 +643,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.5.6 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.5.7 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -1062,6 +1062,9 @@
         if (_ytVideoId) {
           document.getElementById('yt-overlay').style.display = 'none';
           document.getElementById('yt-iframe').src = '';
+        } else {
+          const vid = document.getElementById('ar-video');
+          if (vid) vid.muted = true;
         }
       });
     }
