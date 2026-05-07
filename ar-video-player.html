@@ -680,7 +680,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.6.4 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.6.5 &nbsp;·&nbsp; 2026-05-08</span>
     </div>
 
     <div class="steps-container">
@@ -1296,17 +1296,40 @@
       const dot = document.getElementById('pulsedot');
       dot.classList.remove('found');
       dot.classList.add('searching');
-      document.getElementById('status-label').textContent = '再確認中...';
+      document.getElementById('status-label').textContent = '画像を探しています...';
       document.getElementById('ar-tip').classList.remove('hidden');
 
       const btn = document.getElementById('btn-rescan');
       btn.disabled = true;
 
+      // target の visible を明示的にリセットしてから stop/start
+      const target = document.getElementById('ar-target');
+      if (target) target.object3D.visible = false;
+
       system.stop();
       setTimeout(() => {
-        document.getElementById('status-label').textContent = '画像を探しています...';
         btn.disabled = false;
-        system.start(); // 最後に呼ぶ: targetFound が同期発火しても status を上書きできる
+        system.start();
+
+        // targetFound が発火しない場合のフォールバック: object3D.visible をポーリング
+        let n = 0;
+        const poll = setInterval(() => {
+          if (_markerVisible) { clearInterval(poll); return; } // 正常に発火した
+          const t = document.getElementById('ar-target');
+          if (t && t.object3D && t.object3D.visible) {
+            clearInterval(poll);
+            _markerVisible = true;
+            document.getElementById('pulsedot').classList.remove('searching');
+            document.getElementById('pulsedot').classList.add('found');
+            document.getElementById('status-label').textContent = '動画を再生中';
+            document.getElementById('ar-tip').classList.add('hidden');
+            if (!_ytVideoId) {
+              const v = document.getElementById('ar-video');
+              if (v) { v.muted = !_audioEnabled; v.play().catch(() => { v.muted = true; }); }
+            }
+          }
+          if (++n >= 40) clearInterval(poll); // 10秒でタイムアウト
+        }, 250);
       }, 600);
     }
 
