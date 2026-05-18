@@ -680,7 +680,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.6.5 &nbsp;·&nbsp; 2026-05-08</span>
+      <span class="version-badge">v1.7.0 &nbsp;·&nbsp; 2026-05-18</span>
     </div>
 
     <div class="steps-container">
@@ -1030,7 +1030,8 @@
         // autoStart: false + 手動 system.start() は this.ui 競合で不安定なため
         // autoStart を省略（デフォルト true）にして MindAR 自身に起動を管理させる
         scene.setAttribute('mindar-image',
-          'imageTargetSrc: ./mindar-target.mind; uiLoading: no; uiError: no; uiScanning: no');
+          'imageTargetSrc: ./mindar-target.mind; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: 0.1; filterBeta: 1000; missTolerance: 10; warmupTolerance: 3');
+        scene.setAttribute('renderer', 'antialias: false; physicallyCorrectLights: false');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
         scene.id = 'main-scene';
@@ -1141,7 +1142,11 @@
         let cameraStream;
         try {
           cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } }, audio: false
+            video: {
+              facingMode: { ideal: 'environment' },
+              frameRate: { ideal: 60, min: 30 }
+            },
+            audio: false
           });
         } catch (e) {
           alert('カメラへのアクセスができません。\nブラウザの設定でカメラを許可してください。\n(' + e.name + ')');
