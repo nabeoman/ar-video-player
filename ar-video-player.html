@@ -796,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.9.3 &nbsp;·&nbsp; 2026-05-18</span>
+      <span class="version-badge">v1.9.4 &nbsp;·&nbsp; 2026-05-18</span>
     </div>
 
     <div class="steps-container">
@@ -948,6 +948,7 @@
     let _markerVisible = false;
     let _userPaused = false;
     let _currentVideoSrc = null;
+    let _cameraStream    = null;
     let _rfMinCF   = 0.1;
     let _rfBeta    = 1000;
     let _rfMissTol = 10;
@@ -960,6 +961,27 @@
     let _hwZoomMax       = 4.0;
     let _cameraTrack     = null;
     let _zoomBadgeTimer  = null;
+
+    /* ══════════════════════════════════════
+       Camera stream GUM override
+       rebuildScene前に毎回呼ぶことで、MindARが
+       キャッシュ済みストリームを使い ar-viewport内に
+       ビデオ要素を正しく配置する
+    ══════════════════════════════════════ */
+    function setupGUMOverride() {
+      if (!_cameraStream) return;
+      const stream = _cameraStream;
+      const _origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      let handed = false;
+      navigator.mediaDevices.getUserMedia = function(c) {
+        if (!handed) {
+          handed = true;
+          navigator.mediaDevices.getUserMedia = _origGUM;
+          return Promise.resolve(stream);
+        }
+        return _origGUM(c);
+      };
+    }
 
     /* ══════════════════════════════════════
        Pinch Zoom
@@ -1133,6 +1155,7 @@
         minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol
       }));
 
+      setupGUMOverride();
       const newScene = await rebuildScene(_currentVideoSrc);
       _dbgScene = newScene;
       applyCSSZoom(_currentZoom);
@@ -1510,6 +1533,7 @@
         }
 
         // カメラトラック取得・ハードウェアズーム対応確認
+        _cameraStream = cameraStream; // グローバルに保持（rebuildScene再呼び出し時に再利用）
         _cameraTrack = cameraStream.getVideoTracks()[0];
         _hwZoomSupported = false;
         _hwZoomMin = 1.0; _hwZoomMax = 4.0;
@@ -1523,16 +1547,7 @@
         }
 
         // MindAR が内部で getUserMedia を呼んだとき取得済みストリームを渡す
-        const _origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-        let handed = false;
-        navigator.mediaDevices.getUserMedia = function(c) {
-          if (!handed) {
-            handed = true;
-            navigator.mediaDevices.getUserMedia = _origGUM;
-            return Promise.resolve(cameraStream);
-          }
-          return _origGUM(c);
-        };
+        setupGUMOverride();
 
         // ── Step B: ターゲット画像のコンパイル（キャッシュあれば省略）──
         const sourceKey = activeMarkerTab === 'custom'
@@ -1691,7 +1706,8 @@
       await new Promise(r => setTimeout(r, 300));
 
       // シーンを再構築（コンパイル済みバッファ使用のため高速）
-      // ar-viewport 内に正しく挿入されるため、ズーム状態も維持される
+      // GUM overrideを再設定してMindARが ar-viewport内にビデオ要素を正しく配置するようにする
+      setupGUMOverride();
       const newScene = await rebuildScene(_currentVideoSrc);
       _dbgScene = newScene;
       applyCSSZoom(_currentZoom);
@@ -1811,6 +1827,7 @@
       _userPaused = false;
       document.removeEventListener('click', handleArTap);
       removePinchZoom();
+      _cameraStream = null;
       _cameraTrack = null;
       _hwZoomSupported = false;
       _dbgScene = null;
