@@ -796,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.9.6 &nbsp;·&nbsp; 2026-05-18</span>
+      <span class="version-badge">v1.9.7 &nbsp;·&nbsp; 2026-05-18</span>
     </div>
 
     <div class="steps-container">
@@ -962,6 +962,7 @@
     let _cameraTrack     = null;
     let _zoomBadgeTimer  = null;
     let _bodyObserver    = null;
+    let _bodyArElements  = [];
 
     /* ══════════════════════════════════════
        Camera stream GUM override
@@ -993,11 +994,21 @@
       return Math.sqrt(dx * dx + dy * dy);
     }
 
+    function _applyScaleToBodyEl(el, z) {
+      el.style.setProperty('transform-origin', 'center center', 'important');
+      if (z <= 1.001) {
+        el.style.removeProperty('transform');
+      } else {
+        el.style.setProperty('transform', `scale(${z})`, 'important');
+      }
+    }
+
     function applyCSSZoom(z) {
       const vp = document.getElementById('ar-viewport');
       if (!vp) return;
       vp.style.transformOrigin = 'center center';
       vp.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
+      _bodyArElements.forEach(el => _applyScaleToBodyEl(el, z));
     }
 
     function applyZoom(z) {
@@ -1069,7 +1080,7 @@
 
     function startBodyObserver() {
       if (_bodyObserver) _bodyObserver.disconnect();
-      const viewport = document.getElementById('ar-viewport');
+      _bodyArElements = [];
       _bodyObserver = new MutationObserver(mutations => {
         mutations.forEach(m => {
           m.addedNodes.forEach(node => {
@@ -1077,13 +1088,8 @@
             const tag = node.tagName;
             if ((tag === 'VIDEO' || tag === 'CANVAS') &&
                 node.parentElement === document.body) {
-              viewport.appendChild(node);
-              node.style.setProperty('position', 'absolute', 'important');
-              node.style.setProperty('top', '0', 'important');
-              node.style.setProperty('left', '0', 'important');
-              node.style.setProperty('width', '100%', 'important');
-              node.style.setProperty('height', '100%', 'important');
-              node.style.setProperty('z-index', '0', 'important');
+              _bodyArElements.push(node);
+              _applyScaleToBodyEl(node, _currentZoom);
             }
           });
         });
@@ -1092,6 +1098,11 @@
     }
 
     function stopBodyObserver() {
+      _bodyArElements.forEach(el => {
+        el.style.removeProperty('transform');
+        el.style.removeProperty('transform-origin');
+      });
+      _bodyArElements = [];
       if (_bodyObserver) { _bodyObserver.disconnect(); _bodyObserver = null; }
     }
 
