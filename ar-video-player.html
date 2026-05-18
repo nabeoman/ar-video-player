@@ -796,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.9.1 &nbsp;·&nbsp; 2026-05-18</span>
+      <span class="version-badge">v1.9.2 &nbsp;·&nbsp; 2026-05-18</span>
     </div>
 
     <div class="steps-container">
@@ -1010,8 +1010,9 @@
     function onPinchMove(e) {
       if (!arStarted || e.touches.length !== 2 || _pinchStartDist === null) return;
       e.preventDefault();
-      const newZ = Math.max(1.0, Math.min(4.0,
-        _pinchStartZoom * (getPinchDist(e.touches) / _pinchStartDist)));
+      const rawRatio = getPinchDist(e.touches) / _pinchStartDist;
+      const dampedRatio = 1.0 + (rawRatio - 1.0) * 0.5; // 感度を半減
+      const newZ = Math.max(1.0, Math.min(4.0, _pinchStartZoom * dampedRatio));
       applyZoom(newZ);
     }
 
@@ -1020,6 +1021,15 @@
     }
 
     function initPinchZoom() {
+      document.addEventListener('touchstart', onPinchStart, { passive: false });
+      document.addEventListener('touchmove',  onPinchMove,  { passive: false });
+      document.addEventListener('touchend',   onPinchEnd,   { passive: false });
+    }
+
+    function rebindPinchZoom() {
+      document.removeEventListener('touchstart', onPinchStart);
+      document.removeEventListener('touchmove',  onPinchMove);
+      document.removeEventListener('touchend',   onPinchEnd);
       document.addEventListener('touchstart', onPinchStart, { passive: false });
       document.addEventListener('touchmove',  onPinchMove,  { passive: false });
       document.addEventListener('touchend',   onPinchEnd,   { passive: false });
@@ -1677,6 +1687,7 @@
       setTimeout(() => {
         btn.disabled = false;
         system.start();
+        rebindPinchZoom(); // system再起動後にタッチリスナーを再バインド
 
         // targetFound が発火しない場合のフォールバック: object3D.visible をポーリング
         let n = 0;
