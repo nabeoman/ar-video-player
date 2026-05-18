@@ -535,6 +535,41 @@
       cursor: pointer; font-family: monospace; line-height: 1.4;
     }
 
+    /* ========== RESPONSE PANEL ========== */
+    #rf-panel {
+      position: fixed;
+      bottom: 8rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 300;
+      display: none;
+      background: rgba(0,0,0,0.78);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 0.6rem 1rem 0.7rem;
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.9);
+      font-family: 'Menlo', 'Monaco', monospace;
+      line-height: 1.6;
+      min-width: 270px;
+    }
+    .rf-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 0.45rem;
+      letter-spacing: 0.01em;
+    }
+    .rf-ctrl { display: flex; flex-direction: column; gap: 0.15rem; }
+    .rf-desc {
+      font-size: 0.62rem;
+      color: rgba(255,255,255,0.38);
+      margin: -0.1rem 0 0.2rem 0;
+      padding-left: 4rem;
+      line-height: 1.3;
+    }
+
     /* ========== YOUTUBE OVERLAY ========== */
     #yt-overlay {
       position: fixed;
@@ -620,6 +655,10 @@
     </div>
     <!-- 管理用ボタン（右） -->
     <div style="display:flex;gap:0.5rem;align-items:center;">
+      <button class="btn-exit" id="btn-rf-toggle" onclick="toggleResponsePanel()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        レスポンス
+      </button>
       <button class="btn-exit" id="btn-debug-toggle" onclick="toggleDebug()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="vertical-align:-1px">
           <line x1="4" y1="6" x2="20" y2="6"/><circle cx="10" cy="6" r="2.5" fill="currentColor" stroke="none"/>
@@ -670,6 +709,50 @@
     </div>
   </div>
 
+  <!-- ===== RESPONSE PANEL ===== -->
+  <div id="rf-panel">
+    <div class="rf-title">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:0.3rem"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+      レスポンス調整
+    </div>
+    <div class="rf-ctrl">
+      <div class="dc-row">
+        <span class="dc-label">MinCF</span>
+        <button class="dc-btn" onclick="adjRF('minCF',-0.01)">−</button>
+        <span class="dc-val" id="rf-mincf-val">0.100</span>
+        <button class="dc-btn" onclick="adjRF('minCF',+0.01)">+</button>
+      </div>
+      <div class="rf-desc">追従遅延 &nbsp;0.001(遅/滑) ↔ 1.0(速/ブレ) &nbsp;step:0.01</div>
+      <div class="dc-row">
+        <span class="dc-label">Beta</span>
+        <button class="dc-btn" onclick="adjRF('beta',-100)">−</button>
+        <span class="dc-val" id="rf-beta-val">1000</span>
+        <button class="dc-btn" onclick="adjRF('beta',+100)">+</button>
+      </div>
+      <div class="rf-desc">高速追従 &nbsp;0(低) ↔ 5000(高) &nbsp;step:100</div>
+      <div class="dc-row">
+        <span class="dc-label">Miss</span>
+        <button class="dc-btn" onclick="adjRF('miss',-1)">−</button>
+        <span class="dc-val" id="rf-miss-val">10</span>
+        <button class="dc-btn" onclick="adjRF('miss',+1)">+</button>
+      </div>
+      <div class="rf-desc">ロスト猶予 &nbsp;1(厳) ↔ 30(緩) &nbsp;step:1</div>
+      <div class="dc-row">
+        <span class="dc-label">Warmup</span>
+        <button class="dc-btn" onclick="adjRF('warmup',-1)">−</button>
+        <span class="dc-val" id="rf-warmup-val">3</span>
+        <button class="dc-btn" onclick="adjRF('warmup',+1)">+</button>
+      </div>
+      <div class="rf-desc">検出開始 &nbsp;0(早) ↔ 10(遅) &nbsp;step:1</div>
+      <div class="dc-row" style="margin-top:0.45rem;justify-content:space-between;">
+        <button id="btn-rf-apply" class="dc-btn" style="flex:1.4;background:rgba(92,110,245,0.35);border-color:rgba(92,110,245,0.6)" onclick="applyRFSettings()">▶ 適用</button>
+        <button class="dc-btn" style="flex:1;margin-left:0.4rem;" onclick="saveRFOnlySettings()">保存</button>
+        <button class="dc-btn" style="flex:1;margin-left:0.4rem;background:rgba(255,80,80,0.25);border-color:rgba(255,80,80,0.4)" onclick="resetRFSettings()">リセット</button>
+      </div>
+      <div id="rf-status-msg" style="font-size:0.7rem;color:rgba(92,245,150,0.85);text-align:center;display:none;margin-top:0.25rem"></div>
+    </div>
+  </div>
+
   <!-- ===== SETUP SCREEN ===== -->
   <div id="screen-setup">
     <div class="brand">
@@ -680,7 +763,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.7.0 &nbsp;·&nbsp; 2026-05-18</span>
+      <span class="version-badge">v1.8.0 &nbsp;·&nbsp; 2026-05-18</span>
     </div>
 
     <div class="steps-container">
@@ -831,6 +914,153 @@
     let _audioEnabled = true;
     let _markerVisible = false;
     let _userPaused = false;
+    let _currentVideoSrc = null;
+    let _rfMinCF   = 0.1;
+    let _rfBeta    = 1000;
+    let _rfMissTol = 10;
+    let _rfWarmTol = 3;
+
+    /* ══════════════════════════════════════
+       Response filter settings
+    ══════════════════════════════════════ */
+    function buildMindarAttr() {
+      return `imageTargetSrc: ./mindar-target.mind; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: ${_rfMinCF}; filterBeta: ${_rfBeta}; missTolerance: ${_rfMissTol}; warmupTolerance: ${_rfWarmTol}`;
+    }
+
+    function syncRFPanel() {
+      document.getElementById('rf-mincf-val').textContent  = _rfMinCF.toFixed(3);
+      document.getElementById('rf-beta-val').textContent   = _rfBeta;
+      document.getElementById('rf-miss-val').textContent   = _rfMissTol;
+      document.getElementById('rf-warmup-val').textContent = _rfWarmTol;
+    }
+
+    function showRFMsg(msg, duration) {
+      const el = document.getElementById('rf-status-msg');
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => { el.style.display = 'none'; }, duration || 2200);
+    }
+
+    function loadRFSettings() {
+      try {
+        const s = localStorage.getItem('ar-rf-settings');
+        if (!s) { syncRFPanel(); return; }
+        const d = JSON.parse(s);
+        if (typeof d.minCF  === 'number') _rfMinCF   = d.minCF;
+        if (typeof d.beta   === 'number') _rfBeta    = d.beta;
+        if (typeof d.miss   === 'number') _rfMissTol = d.miss;
+        if (typeof d.warmup === 'number') _rfWarmTol = d.warmup;
+      } catch(e) {}
+      syncRFPanel();
+    }
+
+    function saveRFOnlySettings() {
+      localStorage.setItem('ar-rf-settings', JSON.stringify({
+        minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol
+      }));
+      showRFMsg('✓ 保存しました');
+    }
+
+    function adjRF(param, delta) {
+      if (param === 'minCF') {
+        _rfMinCF = Math.round(Math.max(0.001, Math.min(1.0, _rfMinCF + delta)) * 1000) / 1000;
+      } else if (param === 'beta') {
+        _rfBeta = Math.max(0, Math.min(5000, _rfBeta + delta));
+      } else if (param === 'miss') {
+        _rfMissTol = Math.max(1, Math.min(30, _rfMissTol + delta));
+      } else if (param === 'warmup') {
+        _rfWarmTol = Math.max(0, Math.min(10, _rfWarmTol + delta));
+      }
+      syncRFPanel();
+    }
+
+    async function applyRFSettings() {
+      if (!arStarted || !_currentVideoSrc) {
+        showRFMsg('⚠ AR起動中のみ適用できます');
+        return;
+      }
+      const applyBtn = document.getElementById('btn-rf-apply');
+      applyBtn.disabled = true;
+      showRFMsg('⟳ 再起動中...', 15000);
+
+      _markerVisible = false;
+      _userPaused = false;
+      const dot = document.getElementById('pulsedot');
+      dot.classList.remove('found');
+      dot.classList.add('searching');
+      document.getElementById('status-label').textContent = '再起動中...';
+
+      const oldScene = document.getElementById('main-scene');
+      if (oldScene) {
+        const system = oldScene.systems && oldScene.systems['mindar-image-system'];
+        if (system) { try { system.stop(); } catch(e) {} }
+      }
+      const vid = document.getElementById('ar-video');
+      if (vid) { try { vid.pause(); } catch(e) {} }
+      if (_ytVideoId) {
+        document.getElementById('yt-overlay').style.display = 'none';
+        document.getElementById('yt-iframe').src = '';
+      }
+
+      await new Promise(r => setTimeout(r, 400));
+
+      localStorage.setItem('ar-rf-settings', JSON.stringify({
+        minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol
+      }));
+
+      const newScene = await rebuildScene(_currentVideoSrc);
+      _dbgScene = newScene;
+
+      if (!_ytVideoId) {
+        const dbgInfo = document.getElementById('debug-info');
+        (function applyRatio(n) {
+          if (!newScene.isConnected) return;
+          const v2   = newScene.querySelector('#ar-video');
+          const aVid = newScene.querySelector('a-video');
+          if (v2 && aVid && v2.videoWidth > 0) {
+            const pixelRatio = v2.videoHeight / v2.videoWidth;
+            const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
+            const saved = loadSavedAdjust();
+            _dbgH = saved ? saved.h : corrected;
+            _dbgY = saved ? saved.y : -0.06;
+            aVid.setAttribute('height', _dbgH);
+            aVid.setAttribute('position', `0 ${_dbgY} 0.001`);
+            document.getElementById('dc-h-val').textContent = _dbgH.toFixed(4);
+            document.getElementById('dc-y-val').textContent = _dbgY.toFixed(4);
+            dbgInfo.dataset.baseH = corrected.toFixed(4);
+          } else if (n < 19) {
+            setTimeout(() => applyRatio(n + 1), 250);
+          }
+        })(0);
+      }
+
+      document.getElementById('status-label').textContent = '画像を探しています...';
+      document.getElementById('ar-tip').classList.remove('hidden');
+      setTimeout(attachTargetEvents, 1000);
+      applyBtn.disabled = false;
+      showRFMsg('✓ 適用しました');
+    }
+
+    function resetRFSettings() {
+      localStorage.removeItem('ar-rf-settings');
+      _rfMinCF = 0.1; _rfBeta = 1000; _rfMissTol = 10; _rfWarmTol = 3;
+      syncRFPanel();
+      showRFMsg('✓ リセットしました');
+    }
+
+    function toggleResponsePanel() {
+      const rfp = document.getElementById('rf-panel');
+      const dbg = document.getElementById('debug-panel');
+      const btn = document.getElementById('btn-rf-toggle');
+      const isOpen = rfp.style.display === 'block';
+      if (!isOpen) {
+        dbg.style.display = 'none';
+        document.getElementById('btn-debug-toggle').classList.remove('active');
+      }
+      rfp.style.display = isOpen ? 'none' : 'block';
+      btn.classList.toggle('active', !isOpen);
+    }
 
     function extractYouTubeID(url) {
       if (!url) return null;
@@ -1029,8 +1259,7 @@
         // 固定パスを使い、fetch interceptor で window._mindARBuffer を返す
         // autoStart: false + 手動 system.start() は this.ui 競合で不安定なため
         // autoStart を省略（デフォルト true）にして MindAR 自身に起動を管理させる
-        scene.setAttribute('mindar-image',
-          'imageTargetSrc: ./mindar-target.mind; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: 0.1; filterBeta: 1000; missTolerance: 10; warmupTolerance: 3');
+        scene.setAttribute('mindar-image', buildMindarAttr());
         scene.setAttribute('renderer', 'antialias: false; physicallyCorrectLights: false');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
@@ -1118,8 +1347,10 @@
        Start AR
     ══════════════════════════════════════ */
     async function startAR() {
+      loadRFSettings();
       const videoSrc = resolveVideoSrc();
       if (!videoSrc) return;
+      _currentVideoSrc = videoSrc;
       _ytVideoId = extractYouTubeID(videoSrc);
       _ytShorts  = _ytVideoId ? /youtube\.com\/shorts\//.test(videoSrc) : false;
 
@@ -1366,8 +1597,13 @@
 
     function toggleDebug() {
       const dbg = document.getElementById('debug-panel');
+      const rfp = document.getElementById('rf-panel');
       const btn = document.getElementById('btn-debug-toggle');
       const isOpen = dbg.style.display === 'block';
+      if (!isOpen) {
+        rfp.style.display = 'none';
+        document.getElementById('btn-rf-toggle').classList.remove('active');
+      }
       dbg.style.display = isOpen ? 'none' : 'block';
       btn.classList.toggle('active', !isOpen);
     }
@@ -1430,8 +1666,14 @@
       document.getElementById('ar-tip').style.display = 'none';
       document.getElementById('debug-panel').style.display = 'none';
       document.getElementById('btn-debug-toggle').classList.remove('active');
+      document.getElementById('rf-panel').style.display = 'none';
+      document.getElementById('btn-rf-toggle').classList.remove('active');
+      _currentVideoSrc = null;
       document.getElementById('screen-setup').style.display = 'flex';
     }
+
+    // ページ読み込み時にlocalStorageから復元
+    loadRFSettings();
   </script>
 </body>
 </html>
