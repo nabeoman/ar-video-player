@@ -796,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.9.5 &nbsp;·&nbsp; 2026-05-18</span>
+      <span class="version-badge">v1.9.6 &nbsp;·&nbsp; 2026-05-18</span>
     </div>
 
     <div class="steps-container">
@@ -961,6 +961,7 @@
     let _hwZoomMax       = 4.0;
     let _cameraTrack     = null;
     let _zoomBadgeTimer  = null;
+    let _bodyObserver    = null;
 
     /* ══════════════════════════════════════
        Camera stream GUM override
@@ -1064,6 +1065,34 @@
       applyCSSZoom(1.0);
       _currentZoom = 1.0;
       _pinchStartDist = null;
+    }
+
+    function startBodyObserver() {
+      if (_bodyObserver) _bodyObserver.disconnect();
+      const viewport = document.getElementById('ar-viewport');
+      _bodyObserver = new MutationObserver(mutations => {
+        mutations.forEach(m => {
+          m.addedNodes.forEach(node => {
+            if (node.nodeType !== 1) return;
+            const tag = node.tagName;
+            if ((tag === 'VIDEO' || tag === 'CANVAS') &&
+                node.parentElement === document.body) {
+              viewport.appendChild(node);
+              node.style.setProperty('position', 'absolute', 'important');
+              node.style.setProperty('top', '0', 'important');
+              node.style.setProperty('left', '0', 'important');
+              node.style.setProperty('width', '100%', 'important');
+              node.style.setProperty('height', '100%', 'important');
+              node.style.setProperty('z-index', '0', 'important');
+            }
+          });
+        });
+      });
+      _bodyObserver.observe(document.body, { childList: true });
+    }
+
+    function stopBodyObserver() {
+      if (_bodyObserver) { _bodyObserver.disconnect(); _bodyObserver = null; }
     }
 
     /* ══════════════════════════════════════
@@ -1671,6 +1700,7 @@
         _currentZoom = 1.0;
         applyCSSZoom(1.0);
         document.addEventListener('click', handleArTap);
+        startBodyObserver();
         initPinchZoom();
         setTimeout(attachTargetEvents, 1000);
 
@@ -1846,6 +1876,7 @@
       _markerVisible = false;
       _userPaused = false;
       document.removeEventListener('click', handleArTap);
+      stopBodyObserver();
       removePinchZoom();
       _cameraStream = null;
       _cameraTrack = null;
