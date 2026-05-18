@@ -796,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.9.4 &nbsp;·&nbsp; 2026-05-18</span>
+      <span class="version-badge">v1.9.5 &nbsp;·&nbsp; 2026-05-18</span>
     </div>
 
     <div class="steps-container">
@@ -1399,14 +1399,27 @@
     ══════════════════════════════════════ */
     function rebuildScene(videoSrc) {
       return new Promise(resolve => {
+        // ① カメラトラックの stop() を一時的に無効化
+        //    旧シーン削除時に MindAR cleanup がトラックを止めてしまうと
+        //    GUM Override で返すストリームが無効になり、MindAR が
+        //    リアル getUserMedia を呼んで ar-viewport 外にビデオ要素を置く問題を防ぐ
+        const tracksPatched = [];
+        if (_cameraStream) {
+          _cameraStream.getTracks().forEach(t => {
+            const orig = t.stop.bind(t);
+            tracksPatched.push({ t, orig });
+            t.stop = function() {};
+          });
+        }
+
+        // ② 旧シーンを削除（MindAR cleanup が走るが track.stop は no-op）
         const old = document.querySelector('a-scene');
         if (old) old.remove();
 
+        // ③ GUM Override を再設定（有効なストリームを MindAR に渡す）
+        setupGUMOverride();
+
         const scene = document.createElement('a-scene');
-        // imageTargetSrc に blob URL を使うと A-Frame のパーサーがコロンで誤解析するため
-        // 固定パスを使い、fetch interceptor で window._mindARBuffer を返す
-        // autoStart: false + 手動 system.start() は this.ui 競合で不安定なため
-        // autoStart を省略（デフォルト true）にして MindAR 自身に起動を管理させる
         scene.setAttribute('mindar-image', buildMindarAttr());
         scene.setAttribute('renderer', 'antialias: false; physicallyCorrectLights: false');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
@@ -1434,7 +1447,14 @@
         document.getElementById('ar-viewport').appendChild(scene);
 
         let done = false;
-        const finish = () => { if (!done) { done = true; resolve(scene); } };
+        const finish = () => {
+          if (!done) {
+            done = true;
+            // ④ シーンロード後に track.stop() を復元
+            tracksPatched.forEach(({ t, orig }) => { t.stop = orig; });
+            resolve(scene);
+          }
+        };
         scene.addEventListener('loaded', finish, { once: true });
         setTimeout(finish, 4000);
       });
