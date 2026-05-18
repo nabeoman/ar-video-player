@@ -98,19 +98,25 @@
       overflow: hidden;
     }
 
+    #ar-viewport {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      overflow: hidden;
+    }
     a-scene {
-      position: fixed !important;
+      position: absolute !important;
       top: 0; left: 0;
       width: 100% !important;
       height: 100% !important;
-      z-index: 1;
     }
     .a-canvas {
-      position: fixed !important;
+      position: absolute !important;
       top: 0; left: 0;
       width: 100% !important;
       height: 100% !important;
-      z-index: 1;
     }
 
     /* ========== SETUP SCREEN ========== */
@@ -643,6 +649,9 @@
 </head>
 <body>
 
+  <!-- AR レンダリングコンテナ（ズーム用ラッパー） -->
+  <div id="ar-viewport"></div>
+
   <!-- ===== AR HUD ===== -->
   <div id="ar-status-bar">
     <div id="ar-status-badge">
@@ -787,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.9.0 &nbsp;·&nbsp; 2026-05-18</span>
+      <span class="version-badge">v1.9.1 &nbsp;·&nbsp; 2026-05-18</span>
     </div>
 
     <div class="steps-container">
@@ -962,10 +971,10 @@
     }
 
     function applyCSSZoom(z) {
-      const canvas = document.querySelector('.a-canvas');
-      if (!canvas) return;
-      canvas.style.transformOrigin = 'center center';
-      canvas.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
+      const vp = document.getElementById('ar-viewport');
+      if (!vp) return;
+      vp.style.transformOrigin = 'center center';
+      vp.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
     }
 
     function applyZoom(z) {
@@ -1389,7 +1398,7 @@
           `;
         }
 
-        document.body.insertBefore(scene, document.body.firstChild);
+        document.getElementById('ar-viewport').appendChild(scene);
 
         let done = false;
         const finish = () => { if (!done) { done = true; resolve(scene); } };
