@@ -796,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.9.2 &nbsp;·&nbsp; 2026-05-18</span>
+      <span class="version-badge">v1.9.3 &nbsp;·&nbsp; 2026-05-18</span>
     </div>
 
     <div class="steps-container">
@@ -1659,56 +1659,70 @@
     /* ══════════════════════════════════════
        Debug panel toggle
     ══════════════════════════════════════ */
-    function rescanMarker() {
-      const scene = document.getElementById('main-scene');
-      if (!scene) return;
-      const system = scene.systems['mindar-image-system'];
-      if (!system) return;
-
-      _markerVisible = false;
-      _userPaused = false;
-      const vid = document.getElementById('ar-video');
-      if (vid) { vid.pause(); vid.muted = true; }
-
-      const dot = document.getElementById('pulsedot');
-      dot.classList.remove('found');
-      dot.classList.add('searching');
-      document.getElementById('status-label').textContent = '画像を探しています...';
-      document.getElementById('ar-tip').classList.remove('hidden');
+    async function rescanMarker() {
+      if (!arStarted || !_currentVideoSrc) return;
 
       const btn = document.getElementById('btn-rescan');
       btn.disabled = true;
 
-      // target の visible を明示的にリセットしてから stop/start
-      const target = document.getElementById('ar-target');
-      if (target) target.object3D.visible = false;
+      _markerVisible = false;
+      _userPaused = false;
 
-      system.stop();
-      setTimeout(() => {
-        btn.disabled = false;
-        system.start();
-        rebindPinchZoom(); // system再起動後にタッチリスナーを再バインド
+      const vid = document.getElementById('ar-video');
+      if (vid) { vid.pause(); vid.muted = true; }
+      if (_ytVideoId) {
+        document.getElementById('yt-overlay').style.display = 'none';
+        document.getElementById('yt-iframe').src = '';
+      }
 
-        // targetFound が発火しない場合のフォールバック: object3D.visible をポーリング
-        let n = 0;
-        const poll = setInterval(() => {
-          if (_markerVisible) { clearInterval(poll); return; } // 正常に発火した
-          const t = document.getElementById('ar-target');
-          if (t && t.object3D && t.object3D.visible) {
-            clearInterval(poll);
-            _markerVisible = true;
-            document.getElementById('pulsedot').classList.remove('searching');
-            document.getElementById('pulsedot').classList.add('found');
-            document.getElementById('status-label').textContent = '動画を再生中';
-            document.getElementById('ar-tip').classList.add('hidden');
-            if (!_ytVideoId) {
-              const v = document.getElementById('ar-video');
-              if (v) { v.muted = !_audioEnabled; v.play().catch(() => { v.muted = true; }); }
-            }
+      const dot = document.getElementById('pulsedot');
+      dot.classList.remove('found');
+      dot.classList.add('searching');
+      document.getElementById('status-label').textContent = '再確認中...';
+      document.getElementById('ar-tip').classList.remove('hidden');
+
+      // 旧システムを停止
+      const oldScene = document.getElementById('main-scene');
+      if (oldScene) {
+        const sys = oldScene.systems && oldScene.systems['mindar-image-system'];
+        if (sys) { try { sys.stop(); } catch(e) {} }
+      }
+
+      await new Promise(r => setTimeout(r, 300));
+
+      // シーンを再構築（コンパイル済みバッファ使用のため高速）
+      // ar-viewport 内に正しく挿入されるため、ズーム状態も維持される
+      const newScene = await rebuildScene(_currentVideoSrc);
+      _dbgScene = newScene;
+      applyCSSZoom(_currentZoom);
+
+      if (!_ytVideoId) {
+        const dbgInfo = document.getElementById('debug-info');
+        (function applyRatio(n) {
+          if (!newScene.isConnected) return;
+          const v2   = newScene.querySelector('#ar-video');
+          const aVid = newScene.querySelector('a-video');
+          if (v2 && aVid && v2.videoWidth > 0) {
+            const pixelRatio = v2.videoHeight / v2.videoWidth;
+            const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
+            const saved = loadSavedAdjust();
+            _dbgH = saved ? saved.h : corrected;
+            _dbgY = saved ? saved.y : -0.06;
+            aVid.setAttribute('height', _dbgH);
+            aVid.setAttribute('position', `0 ${_dbgY} 0.001`);
+            document.getElementById('dc-h-val').textContent = _dbgH.toFixed(4);
+            document.getElementById('dc-y-val').textContent = _dbgY.toFixed(4);
+            dbgInfo.dataset.baseH = corrected.toFixed(4);
+          } else if (n < 19) {
+            setTimeout(() => applyRatio(n + 1), 250);
           }
-          if (++n >= 40) clearInterval(poll); // 10秒でタイムアウト
-        }, 250);
-      }, 600);
+        })(0);
+      }
+
+      rebindPinchZoom();
+      document.getElementById('status-label').textContent = '画像を探しています...';
+      setTimeout(attachTargetEvents, 1000);
+      btn.disabled = false;
     }
 
     function handleArTap(e) {
