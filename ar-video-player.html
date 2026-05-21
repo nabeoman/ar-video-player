@@ -796,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.9.8 &nbsp;·&nbsp; 2026-05-21</span>
+      <span class="version-badge">v1.9.9 &nbsp;·&nbsp; 2026-05-21</span>
     </div>
 
     <div class="steps-container">
@@ -997,17 +997,8 @@
     function applyCSSZoom(z) {
       const vp = document.getElementById('ar-viewport');
       if (!vp) return;
-      // .a-canvas を直接スケール（ar-viewport のスケールより確実に機能する）
-      const canvas = vp.querySelector('.a-canvas');
-      if (canvas) {
-        canvas.style.transformOrigin = 'center center';
-        canvas.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
-        vp.style.transform = ''; // 二重スケール防止
-      } else {
-        // フォールバック: canvas 未生成ならビューポートをスケール
-        vp.style.transformOrigin = 'center center';
-        vp.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
-      }
+      vp.style.transformOrigin = 'center center';
+      vp.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
     }
 
     function applyZoom(z) {
@@ -1168,6 +1159,16 @@
       dot.classList.add('searching');
       document.getElementById('status-label').textContent = '再起動中...';
 
+      // sys.stop() より先にカメラトラックを保護
+      const _rfSavedStops = [];
+      if (_cameraStream) {
+        _cameraStream.getTracks().forEach(t => {
+          const orig = t.stop.bind(t);
+          _rfSavedStops.push({ t, orig });
+          t.stop = function() {};
+        });
+      }
+
       const oldScene = document.getElementById('main-scene');
       if (oldScene) {
         const system = oldScene.systems && oldScene.systems['mindar-image-system'];
@@ -1181,6 +1182,8 @@
       }
 
       await new Promise(r => setTimeout(r, 400));
+
+      _rfSavedStops.forEach(({ t, orig }) => { t.stop = orig; });
 
       localStorage.setItem('ar-rf-settings', JSON.stringify({
         minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol
@@ -1747,7 +1750,18 @@
       document.getElementById('status-label').textContent = '再確認中...';
       document.getElementById('ar-tip').classList.remove('hidden');
 
-      // 旧システムを停止
+      // ① sys.stop() より先にカメラトラックを保護
+      //    MindAR の stop() が track.stop() を呼ぶとストリームが恒久的に破壊されるため
+      const _savedTrackStops = [];
+      if (_cameraStream) {
+        _cameraStream.getTracks().forEach(t => {
+          const orig = t.stop.bind(t);
+          _savedTrackStops.push({ t, orig });
+          t.stop = function() {};
+        });
+      }
+
+      // 旧システムを停止（track.stop はno-op済みなので安全）
       const oldScene = document.getElementById('main-scene');
       if (oldScene) {
         const sys = oldScene.systems && oldScene.systems['mindar-image-system'];
@@ -1756,14 +1770,14 @@
 
       await new Promise(r => setTimeout(r, 300));
 
+      // ② パッチを解除してから rebuildScene へ（rebuildScene が正しく再パッチ・復元する）
+      _savedTrackStops.forEach(({ t, orig }) => { t.stop = orig; });
+
       // シーンを再構築（コンパイル済みバッファ使用のため高速）
-      // GUM overrideを再設定してMindARが ar-viewport内にビデオ要素を正しく配置するようにする
       setupGUMOverride();
       const newScene = await rebuildScene(_currentVideoSrc);
       _dbgScene = newScene;
       applyCSSZoom(_currentZoom);
-      // MindAR 非同期初期化完了後にズームを再適用（タイミング保証）
-      setTimeout(() => applyCSSZoom(_currentZoom), 500);
 
       if (!_ytVideoId) {
         const dbgInfo = document.getElementById('debug-info');
