@@ -796,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v1.9.7 &nbsp;·&nbsp; 2026-05-18</span>
+      <span class="version-badge">v1.9.8 &nbsp;·&nbsp; 2026-05-21</span>
     </div>
 
     <div class="steps-container">
@@ -994,34 +994,25 @@
       return Math.sqrt(dx * dx + dy * dy);
     }
 
-    function _applyScaleToBodyEl(el, z) {
-      el.style.setProperty('transform-origin', 'center center', 'important');
-      if (z <= 1.001) {
-        el.style.removeProperty('transform');
-      } else {
-        el.style.setProperty('transform', `scale(${z})`, 'important');
-      }
-    }
-
     function applyCSSZoom(z) {
       const vp = document.getElementById('ar-viewport');
       if (!vp) return;
-      vp.style.transformOrigin = 'center center';
-      vp.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
-      _bodyArElements.forEach(el => _applyScaleToBodyEl(el, z));
+      // .a-canvas を直接スケール（ar-viewport のスケールより確実に機能する）
+      const canvas = vp.querySelector('.a-canvas');
+      if (canvas) {
+        canvas.style.transformOrigin = 'center center';
+        canvas.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
+        vp.style.transform = ''; // 二重スケール防止
+      } else {
+        // フォールバック: canvas 未生成ならビューポートをスケール
+        vp.style.transformOrigin = 'center center';
+        vp.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
+      }
     }
 
     function applyZoom(z) {
       _currentZoom = z;
-      if (_hwZoomSupported && _cameraTrack) {
-        const ratio = (z - 1.0) / (4.0 - 1.0);
-        const hwZ   = _hwZoomMin + ratio * (_hwZoomMax - _hwZoomMin);
-        _cameraTrack.applyConstraints({
-          advanced: [{ zoom: Math.max(_hwZoomMin, Math.min(_hwZoomMax, hwZ)) }]
-        }).catch(() => applyCSSZoom(z));
-      } else {
-        applyCSSZoom(z);
-      }
+      applyCSSZoom(z);
       showZoomBadge(z);
     }
 
@@ -1711,7 +1702,6 @@
         _currentZoom = 1.0;
         applyCSSZoom(1.0);
         document.addEventListener('click', handleArTap);
-        startBodyObserver();
         initPinchZoom();
         setTimeout(attachTargetEvents, 1000);
 
@@ -1772,6 +1762,8 @@
       const newScene = await rebuildScene(_currentVideoSrc);
       _dbgScene = newScene;
       applyCSSZoom(_currentZoom);
+      // MindAR 非同期初期化完了後にズームを再適用（タイミング保証）
+      setTimeout(() => applyCSSZoom(_currentZoom), 500);
 
       if (!_ytVideoId) {
         const dbgInfo = document.getElementById('debug-info');
@@ -1887,7 +1879,6 @@
       _markerVisible = false;
       _userPaused = false;
       document.removeEventListener('click', handleArTap);
-      stopBodyObserver();
       removePinchZoom();
       _cameraStream = null;
       _cameraTrack = null;
