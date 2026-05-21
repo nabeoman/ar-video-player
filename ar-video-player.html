@@ -782,9 +782,6 @@
         <button class="dc-btn" style="flex:1;margin-left:0.4rem;" onclick="saveRFOnlySettings()">保存</button>
         <button class="dc-btn" style="flex:1;margin-left:0.4rem;background:rgba(255,80,80,0.25);border-color:rgba(255,80,80,0.4)" onclick="resetRFSettings()">リセット</button>
       </div>
-      <div class="dc-row" style="margin-top:0.3rem;">
-        <button class="dc-btn" style="flex:1;background:rgba(255,165,0,0.2);border-color:rgba(255,165,0,0.5);font-size:0.7rem" onclick="shareSettingsToServer()">🔑 全員に共有（管理者）</button>
-      </div>
       <div id="rf-status-msg" style="font-size:0.7rem;color:rgba(92,245,150,0.85);text-align:center;display:none;margin-top:0.25rem"></div>
     </div>
   </div>
@@ -799,7 +796,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v2.0.0 &nbsp;·&nbsp; 2026-05-21</span>
+      <span class="version-badge">v1.9.9 &nbsp;·&nbsp; 2026-05-21</span>
     </div>
 
     <div class="steps-container">
@@ -952,7 +949,6 @@
     let _userPaused = false;
     let _currentVideoSrc = null;
     let _cameraStream    = null;
-    let _serverSettings = null;
     let _rfMinCF   = 0.1;
     let _rfBeta    = 1000;
     let _rfMissTol = 10;
@@ -1116,22 +1112,13 @@
 
     function loadRFSettings() {
       try {
-        const srv = _serverSettings && _serverSettings.rf;
-        if (srv) {
-          if (typeof srv.minCF  === 'number') _rfMinCF   = srv.minCF;
-          if (typeof srv.beta   === 'number') _rfBeta    = srv.beta;
-          if (typeof srv.miss   === 'number') _rfMissTol = srv.miss;
-          if (typeof srv.warmup === 'number') _rfWarmTol = srv.warmup;
-        } else {
-          const s = localStorage.getItem('ar-rf-settings');
-          if (s) {
-            const d = JSON.parse(s);
-            if (typeof d.minCF  === 'number') _rfMinCF   = d.minCF;
-            if (typeof d.beta   === 'number') _rfBeta    = d.beta;
-            if (typeof d.miss   === 'number') _rfMissTol = d.miss;
-            if (typeof d.warmup === 'number') _rfWarmTol = d.warmup;
-          }
-        }
+        const s = localStorage.getItem('ar-rf-settings');
+        if (!s) { syncRFPanel(); return; }
+        const d = JSON.parse(s);
+        if (typeof d.minCF  === 'number') _rfMinCF   = d.minCF;
+        if (typeof d.beta   === 'number') _rfBeta    = d.beta;
+        if (typeof d.miss   === 'number') _rfMissTol = d.miss;
+        if (typeof d.warmup === 'number') _rfWarmTol = d.warmup;
       } catch(e) {}
       syncRFPanel();
     }
@@ -1244,49 +1231,6 @@
       showRFMsg('✓ リセットしました');
     }
 
-    async function shareSettingsToServer() {
-      const pw = prompt('管理者パスワードを入力してください');
-      if (!pw) return;
-      const adjust = {};
-      for (const tab of ['file', 'url', 'demo']) {
-        const ls = localStorage.getItem('ar-adjust-' + tab);
-        adjust[tab] = ls ? JSON.parse(ls) : null;
-      }
-      if (typeof _dbgH === 'number' && typeof _dbgY === 'number') {
-        adjust[activeVideoTab] = { h: _dbgH, y: _dbgY };
-      }
-      const payload = {
-        password: pw,
-        rf: { minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol },
-        adjust: adjust
-      };
-      try {
-        showRFMsg('⟳ 送信中...', 8000);
-        const resp = await fetch('./save_settings.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await resp.json();
-        if (data.ok) {
-          _serverSettings = { rf: payload.rf, adjust: payload.adjust };
-          showRFMsg('✓ 全員に設定を共有しました');
-        } else {
-          showRFMsg('✗ ' + (data.error || '保存失敗'));
-        }
-      } catch(e) {
-        showRFMsg('✗ サーバーへの接続に失敗しました');
-      }
-    }
-
-    async function loadAllSettings() {
-      try {
-        const resp = await fetch('./settings.json?t=' + Date.now());
-        if (resp.ok) _serverSettings = await resp.json();
-      } catch(e) {}
-      loadRFSettings();
-    }
-
     function toggleResponsePanel() {
       const rfp = document.getElementById('rf-panel');
       const dbg = document.getElementById('debug-panel');
@@ -1315,8 +1259,6 @@
 
     function loadSavedAdjust() {
       try {
-        const adj = _serverSettings && _serverSettings.adjust;
-        if (adj && adj[activeVideoTab]) return adj[activeVideoTab];
         const s = localStorage.getItem(getAdjustKey());
         return s ? JSON.parse(s) : null;
       } catch(e) { return null; }
@@ -1973,8 +1915,8 @@
       document.getElementById('screen-setup').style.display = 'flex';
     }
 
-    // ページ読み込み時にサーバー設定を取得してから復元
-    loadAllSettings();
+    // ページ読み込み時にlocalStorageから復元
+    loadRFSettings();
   </script>
 </body>
 </html>
