@@ -628,6 +628,29 @@
       color: rgba(255,255,255,0.6);
     }
 
+    /* ========== FULLSCREEN OVERLAY ========== */
+    #fs-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      background: #000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #fs-video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    #fs-ctrl {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
     /* ========== PRINT ========== */
     @media print {
       #screen-setup, #ar-status-bar, #ar-hud, #ar-tip { display: none !important; }
@@ -670,6 +693,15 @@
         </svg>
         再確認
       </button>
+      <button class="btn-exit" id="btn-fullscreen" onclick="enterFullscreenMode()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <polyline points="9 21 3 21 3 15"></polyline>
+          <line x1="21" y1="3" x2="14" y2="10"></line>
+          <line x1="3" y1="21" x2="10" y2="14"></line>
+        </svg>
+        全画面
+      </button>
       <button class="btn-exit" id="btn-audio-toggle" onclick="toggleAudio()">
         <svg id="icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -711,6 +743,27 @@
     </div>
     <p id="yt-tip">マーカーから外すと停止します</p>
   </div>
+  <!-- ===== FULLSCREEN OVERLAY ===== -->
+  <div id="fs-overlay">
+    <video id="fs-video" playsinline webkit-playsinline></video>
+    <div id="fs-ctrl">
+      <button class="btn-exit" id="fs-btn-audio" onclick="toggleFsAudio()">
+        <svg id="fs-icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+        <svg id="fs-icon-sound-off" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;display:none">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <line x1="23" y1="9" x2="17" y2="15"></line>
+          <line x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+        <span id="fs-lbl-audio">音声ON</span>
+      </button>
+      <button class="btn-exit" onclick="exitFullscreenMode()">✕ 閉じる</button>
+    </div>
+  </div>
+
   <div id="debug-panel">
     <div id="debug-info"></div>
     <div id="debug-ctrl">
@@ -796,7 +849,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v2.0.0 &nbsp;·&nbsp; 2026-05-30</span>
+      <span class="version-badge">v2.1.0 &nbsp;·&nbsp; 2026-05-30</span>
     </div>
 
     <div class="steps-container">
@@ -1863,6 +1916,52 @@
       document.getElementById('icon-sound-on').style.display = _audioEnabled ? '' : 'none';
       document.getElementById('icon-sound-off').style.display = _audioEnabled ? 'none' : '';
       document.getElementById('lbl-audio-toggle').textContent = _audioEnabled ? '音声ON' : '音声OFF';
+      // フルスクリーン中も同期
+      syncFsAudioUI(_audioEnabled);
+    }
+
+    function enterFullscreenMode() {
+      const arVideo = document.getElementById('ar-video');
+      if (!arVideo) return;
+      const fsVideo = document.getElementById('fs-video');
+      if (arVideo.captureStream) {
+        fsVideo.srcObject = arVideo.captureStream();
+        fsVideo.muted = false;
+      } else {
+        // captureStream非対応ブラウザ用フォールバック
+        fsVideo.src = arVideo.currentSrc;
+        fsVideo.currentTime = arVideo.currentTime;
+        fsVideo.muted = arVideo.muted;
+      }
+      fsVideo.play().catch(() => { fsVideo.muted = true; fsVideo.play().catch(() => {}); });
+      syncFsAudioUI(_audioEnabled);
+      document.getElementById('fs-overlay').style.display = 'flex';
+    }
+
+    function exitFullscreenMode() {
+      const fsVideo = document.getElementById('fs-video');
+      fsVideo.pause();
+      fsVideo.srcObject = null;
+      fsVideo.src = '';
+      document.getElementById('fs-overlay').style.display = 'none';
+    }
+
+    function toggleFsAudio() {
+      const fsVideo = document.getElementById('fs-video');
+      _audioEnabled = !_audioEnabled;
+      const arVideo = document.getElementById('ar-video');
+      if (arVideo) arVideo.muted = !_audioEnabled;
+      if (fsVideo) fsVideo.muted = !_audioEnabled;
+      document.getElementById('icon-sound-on').style.display = _audioEnabled ? '' : 'none';
+      document.getElementById('icon-sound-off').style.display = _audioEnabled ? 'none' : '';
+      document.getElementById('lbl-audio-toggle').textContent = _audioEnabled ? '音声ON' : '音声OFF';
+      syncFsAudioUI(_audioEnabled);
+    }
+
+    function syncFsAudioUI(enabled) {
+      document.getElementById('fs-icon-sound-on').style.display = enabled ? '' : 'none';
+      document.getElementById('fs-icon-sound-off').style.display = enabled ? 'none' : '';
+      document.getElementById('fs-lbl-audio').textContent = enabled ? '音声ON' : '音声OFF';
     }
 
     function toggleDebug() {
