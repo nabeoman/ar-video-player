@@ -1,0 +1,19 @@
+# =====================================================
+# Xserver: AR動画配信用 CORS・Range設定
+# =====================================================
+
+# 動画ファイルのMIMEタイプ登録
+<IfModule mod_mime.c>
+  AddType video/mp4  .mp4 .m4v
+  AddType video/webm .webm
+</IfModule>
+
+# 動画ファイルへのCORSアクセスとRangeリクエストを許可
+<IfModule mod_headers.c>
+  <FilesMatch "\.(mp4|m4v|webm|ogg)$">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+    Header set Access-Control-Allow-Headers "Range, Content-Type"
+    Header set Accept-Ranges "bytes"
+  </FilesMatch>
+</IfModule>
