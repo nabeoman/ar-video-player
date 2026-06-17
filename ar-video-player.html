@@ -790,6 +790,35 @@
         <button class="dc-btn" style="flex:1;margin-left:0.4rem;background:rgba(255,80,80,0.25);border-color:rgba(255,80,80,0.4)" onclick="resetAdjust()">リセット</button>
       </div>
       <div id="dc-saved-msg" style="font-size:0.7rem;color:rgba(92,245,150,0.85);text-align:center;display:none;margin-top:0.25rem">✓ 保存しました</div>
+
+      <!-- ── クロマキー設定（CK有効時のみ表示）── -->
+      <div id="ck-panel-section" style="display:none;margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid rgba(255,255,255,0.12)">
+        <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.06em;color:rgba(255,255,255,0.45);text-transform:uppercase;margin-bottom:0.4rem">クロマキー</div>
+        <div class="dc-row">
+          <span class="dc-label">色</span>
+          <button class="dc-btn" id="ck-btn-green" onclick="setCKColor('green')" style="flex:1;background:rgba(50,200,80,0.3);border-color:rgba(50,200,80,0.6)">緑</button>
+          <button class="dc-btn" id="ck-btn-blue"  onclick="setCKColor('blue')"  style="flex:1;margin-left:0.3rem">青</button>
+        </div>
+        <div class="dc-row" style="margin-top:0.3rem">
+          <span class="dc-label">範囲</span>
+          <button class="dc-btn" onclick="adjCK('sim',-0.02)">−</button>
+          <span class="dc-val" id="ck-sim-val">0.40</span>
+          <button class="dc-btn" onclick="adjCK('sim',+0.02)">+</button>
+        </div>
+        <div class="rf-desc">透過範囲 &nbsp;0.05(狭) ↔ 0.80(広) &nbsp;step:0.02</div>
+        <div class="dc-row">
+          <span class="dc-label">境界</span>
+          <button class="dc-btn" onclick="adjCK('smt',-0.02)">−</button>
+          <span class="dc-val" id="ck-smt-val">0.08</span>
+          <button class="dc-btn" onclick="adjCK('smt',+0.02)">+</button>
+        </div>
+        <div class="rf-desc">エッジ滑らかさ &nbsp;0.0(硬) ↔ 0.40(柔) &nbsp;step:0.02</div>
+        <div class="dc-row" style="margin-top:0.35rem;justify-content:space-between;">
+          <button class="dc-btn" style="flex:1;background:rgba(92,110,245,0.35);border-color:rgba(92,110,245,0.6)" onclick="saveCKSettings()">保存</button>
+          <button class="dc-btn" style="flex:1;margin-left:0.4rem;background:rgba(255,80,80,0.25);border-color:rgba(255,80,80,0.4)" onclick="resetCKSettings()">リセット</button>
+        </div>
+        <div id="ck-saved-msg" style="font-size:0.7rem;color:rgba(92,245,150,0.85);text-align:center;display:none;margin-top:0.25rem"></div>
+      </div>
     </div>
   </div>
 
@@ -946,6 +975,17 @@
         </div>
       </div>
 
+      <!-- ── クロマキーオプション ── -->
+      <div class="step-card" style="padding-top:0.85rem;padding-bottom:0.85rem">
+        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer">
+          <input type="checkbox" id="ck-enabled-chk" style="width:17px;height:17px;accent-color:#5c6ef5;flex-shrink:0"
+            onchange="_ckEnabled=this.checked;syncCKPanel()">
+          <span style="font-size:0.95rem;font-weight:600;color:var(--text)">クロマキー合成</span>
+          <span style="font-size:0.72rem;color:#5c6ef5;background:rgba(92,110,245,0.13);padding:0.1rem 0.45rem;border-radius:4px;font-weight:700">NEW</span>
+        </label>
+        <p class="hint-text" style="margin-top:0.4rem;margin-left:1.5rem">グリーンバック／ブルーバック動画の背景を透過してAR合成します。調整パネルで色や透過範囲を変更できます。</p>
+      </div>
+
       <!-- ── Step 3: 開始 ── -->
       <div class="step-card">
         <div class="step-head">
@@ -1016,6 +1056,18 @@
     let _zoomBadgeTimer  = null;
     let _bodyObserver    = null;
     let _bodyArElements  = [];
+
+    // Chroma Key Plugin
+    let _ckEnabled      = false;
+    let _ckColorKey     = 'green';
+    let _ckSimilarity   = 0.40;
+    let _ckSmoothness   = 0.08;
+    let _ckCanvas       = null;
+    let _ckGL           = null;
+    let _ckProgram      = null;
+    let _ckTexture      = null;
+    let _ckRafId        = null;
+    let _ckThreeTexture = null;
 
     /* ══════════════════════════════════════
        Camera stream GUM override
@@ -1247,12 +1299,18 @@
       _dbgScene = newScene;
       applyCSSZoom(_currentZoom);
 
+      if (_ckEnabled && !_ytVideoId) {
+        stopCKLoop();
+        const ckVid = newScene.querySelector('#ar-video');
+        if (ckVid) initAndStartCK(ckVid, newScene);
+      }
+
       if (!_ytVideoId) {
         const dbgInfo = document.getElementById('debug-info');
         (function applyRatio(n) {
           if (!newScene.isConnected) return;
           const v2   = newScene.querySelector('#ar-video');
-          const aVid = newScene.querySelector('a-video');
+          const aVid = newScene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
           if (v2 && aVid && v2.videoWidth > 0) {
             const pixelRatio = v2.videoHeight / v2.videoWidth;
             const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
@@ -1518,6 +1576,18 @@
             <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
             <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
           `;
+        } else if (_ckEnabled) {
+          scene.innerHTML = `
+            <a-assets timeout="30000">
+              <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline preload="auto"
+                crossorigin="anonymous" webkit-playsinline="true" style="display:none"></video>
+            </a-assets>
+            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+            <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+              <a-plane id="ar-ck-plane" width="1" height="0.5625" position="0 -0.06 0.001"
+                material="transparent: true; alphaTest: 0.01; depthWrite: false; side: double"></a-plane>
+            </a-entity>
+          `;
         } else {
           scene.innerHTML = `
             <a-assets timeout="30000">
@@ -1724,6 +1794,12 @@
           document.getElementById('btn-debug-toggle').style.display = 'none';
         }
 
+        // CK モード初期化
+        if (_ckEnabled && !_ytVideoId) {
+          const ckVid = scene.querySelector('#ar-video');
+          if (ckVid) initAndStartCK(ckVid, scene);
+        }
+
         // YouTube モード以外: videoWidth が取得できるまでポーリングしてアスペクト比を適用
         if (!_ytVideoId) {
           const dbg = document.getElementById('debug-panel');
@@ -1735,8 +1811,8 @@
           document.getElementById('dc-op-val').textContent = '100%';
           (function applyRatio(n) {
             if (!scene.isConnected) { dbg.style.display = 'none'; return; }
-            const vid = scene.querySelector('#ar-video');
-            const aVid = scene.querySelector('a-video');
+            const vid  = scene.querySelector('#ar-video');
+            const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
             if (vid && aVid && vid.videoWidth > 0) {
               const pixelRatio = vid.videoHeight / vid.videoWidth;
               const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
@@ -1749,7 +1825,7 @@
               document.getElementById('dc-y-val').textContent = _dbgY.toFixed(4);
               dbgInfo.dataset.baseH = corrected.toFixed(4);
               dbgInfo.textContent =
-                `[OK try ${n+1}]${saved ? ' (保存済)' : ''}\n` +
+                `[OK try ${n+1}]${saved ? ' (保存済)' : ''}${_ckEnabled ? ' [CK]' : ''}\n` +
                 `video  : ${vid.videoWidth} × ${vid.videoHeight}px\n` +
                 `pixel ratio : ${pixelRatio.toFixed(4)}\n` +
                 `補正後 ratio : ${corrected.toFixed(4)}\n` +
@@ -1863,12 +1939,18 @@
       _dbgScene = newScene;
       applyCSSZoom(_currentZoom);
 
+      if (_ckEnabled && !_ytVideoId) {
+        stopCKLoop();
+        const ckVid = newScene.querySelector('#ar-video');
+        if (ckVid) initAndStartCK(ckVid, newScene);
+      }
+
       if (!_ytVideoId) {
         const dbgInfo = document.getElementById('debug-info');
         (function applyRatio(n) {
           if (!newScene.isConnected) return;
           const v2   = newScene.querySelector('#ar-video');
-          const aVid = newScene.querySelector('a-video');
+          const aVid = newScene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
           if (v2 && aVid && v2.videoWidth > 0) {
             const pixelRatio = v2.videoHeight / v2.videoWidth;
             const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
@@ -1980,9 +2062,13 @@
     /* ══════════════════════════════════════
        Debug adjustment controls
     ══════════════════════════════════════ */
+    function _dbgTarget() {
+      return _dbgScene && _dbgScene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
+    }
+
     function adjH(delta) {
       _dbgH = +Math.max(0.05, _dbgH + delta).toFixed(4);
-      const aVid = _dbgScene && _dbgScene.querySelector('a-video');
+      const aVid = _dbgTarget();
       if (aVid) aVid.setAttribute('height', _dbgH);
       const el = document.getElementById('dc-h-val');
       if (el) el.textContent = _dbgH.toFixed(4);
@@ -1990,7 +2076,7 @@
 
     function adjY(delta) {
       _dbgY = +(_dbgY + delta).toFixed(4);
-      const aVid = _dbgScene && _dbgScene.querySelector('a-video');
+      const aVid = _dbgTarget();
       if (aVid) aVid.setAttribute('position', `0 ${_dbgY} 0.001`);
       const el = document.getElementById('dc-y-val');
       if (el) el.textContent = _dbgY.toFixed(4);
@@ -1998,13 +2084,200 @@
 
     function adjOpacity(delta) {
       _dbgOpacity = +Math.min(1, Math.max(0, _dbgOpacity + delta)).toFixed(2);
-      const aVid = _dbgScene && _dbgScene.querySelector('a-video');
+      const aVid = _dbgTarget();
       if (aVid) {
         aVid.setAttribute('material', 'transparent', true);
         aVid.setAttribute('material', 'opacity', _dbgOpacity);
       }
       const el = document.getElementById('dc-op-val');
       if (el) el.textContent = Math.round(_dbgOpacity * 100) + '%';
+    }
+
+    /* ══════════════════════════════════════
+       Chroma Key Plugin
+    ══════════════════════════════════════ */
+    function loadCKSettings() {
+      try {
+        const s = localStorage.getItem('ar-ck-settings');
+        if (!s) return;
+        const d = JSON.parse(s);
+        if (typeof d.color === 'string') _ckColorKey   = d.color;
+        if (typeof d.sim   === 'number') _ckSimilarity = d.sim;
+        if (typeof d.smt   === 'number') _ckSmoothness = d.smt;
+      } catch(e) {}
+    }
+
+    function saveCKSettings() {
+      localStorage.setItem('ar-ck-settings', JSON.stringify({
+        color: _ckColorKey, sim: _ckSimilarity, smt: _ckSmoothness
+      }));
+      showCKMsg('✓ 保存しました');
+    }
+
+    function resetCKSettings() {
+      _ckColorKey = 'green'; _ckSimilarity = 0.40; _ckSmoothness = 0.08;
+      syncCKPanel();
+      showCKMsg('✓ リセットしました');
+    }
+
+    function showCKMsg(text) {
+      const msg = document.getElementById('ck-saved-msg');
+      if (!msg) return;
+      msg.textContent = text;
+      msg.style.display = 'block';
+      clearTimeout(msg._t);
+      msg._t = setTimeout(() => { msg.style.display = 'none'; }, 2000);
+    }
+
+    function setCKColor(key) {
+      _ckColorKey = key;
+      syncCKPanel();
+    }
+
+    function adjCK(param, delta) {
+      if (param === 'sim') {
+        _ckSimilarity = Math.round(Math.max(0.05, Math.min(0.80, _ckSimilarity + delta)) * 100) / 100;
+      } else {
+        _ckSmoothness = Math.round(Math.max(0.00, Math.min(0.40, _ckSmoothness + delta)) * 100) / 100;
+      }
+      syncCKPanel();
+    }
+
+    function syncCKPanel() {
+      const chk = document.getElementById('ck-enabled-chk');
+      if (chk) chk.checked = _ckEnabled;
+      const sec = document.getElementById('ck-panel-section');
+      if (sec) sec.style.display = _ckEnabled ? 'block' : 'none';
+      const simEl = document.getElementById('ck-sim-val');
+      if (simEl) simEl.textContent = _ckSimilarity.toFixed(2);
+      const smtEl = document.getElementById('ck-smt-val');
+      if (smtEl) smtEl.textContent = _ckSmoothness.toFixed(2);
+      const gBtn = document.getElementById('ck-btn-green');
+      const bBtn = document.getElementById('ck-btn-blue');
+      if (gBtn) {
+        gBtn.style.background  = _ckColorKey === 'green' ? 'rgba(50,200,80,0.5)'  : '';
+        gBtn.style.borderColor = _ckColorKey === 'green' ? 'rgba(50,200,80,0.8)'  : '';
+      }
+      if (bBtn) {
+        bBtn.style.background  = _ckColorKey === 'blue'  ? 'rgba(80,120,245,0.5)' : '';
+        bBtn.style.borderColor = _ckColorKey === 'blue'  ? 'rgba(80,120,245,0.8)' : '';
+      }
+    }
+
+    function setupCKGL(w, h) {
+      _ckCanvas = document.createElement('canvas');
+      _ckCanvas.width  = w;
+      _ckCanvas.height = h;
+      const gl = _ckCanvas.getContext('webgl') || _ckCanvas.getContext('experimental-webgl');
+      if (!gl) { _ckGL = null; return; }
+      _ckGL = gl;
+
+      const vs = gl.createShader(gl.VERTEX_SHADER);
+      gl.shaderSource(vs, 'attribute vec2 a_pos;attribute vec2 a_uv;varying vec2 v_uv;void main(){gl_Position=vec4(a_pos,0.0,1.0);v_uv=a_uv;}');
+      gl.compileShader(vs);
+
+      const fs = gl.createShader(gl.FRAGMENT_SHADER);
+      gl.shaderSource(fs, 'precision mediump float;uniform sampler2D u_tex;uniform vec3 u_key;uniform float u_sim;uniform float u_smt;varying vec2 v_uv;void main(){vec4 c=texture2D(u_tex,v_uv);float d=length(c.rgb-u_key);float a=smoothstep(u_sim,u_sim+u_smt,d);gl_FragColor=vec4(c.rgb,a);}');
+      gl.compileShader(fs);
+
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      _ckProgram = prog;
+
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      // pos(xy) uv(uv) — v を反転して動画の上下を正す
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1,-1, 0,1,
+         1,-1, 1,1,
+        -1, 1, 0,0,
+         1, 1, 1,0,
+      ]), gl.STATIC_DRAW);
+      const aPos = gl.getAttribLocation(prog, 'a_pos');
+      const aUv  = gl.getAttribLocation(prog, 'a_uv');
+      gl.enableVertexAttribArray(aPos);
+      gl.enableVertexAttribArray(aUv);
+      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
+      gl.vertexAttribPointer(aUv,  2, gl.FLOAT, false, 16, 8);
+
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      _ckTexture = tex;
+    }
+
+    function startCKLoop(videoEl) {
+      if (_ckRafId) cancelAnimationFrame(_ckRafId);
+      const gl = _ckGL;
+      if (!gl) return;
+      gl.useProgram(_ckProgram);
+      const uKey = gl.getUniformLocation(_ckProgram, 'u_key');
+      const uSim = gl.getUniformLocation(_ckProgram, 'u_sim');
+      const uSmt = gl.getUniformLocation(_ckProgram, 'u_smt');
+      gl.uniform1i(gl.getUniformLocation(_ckProgram, 'u_tex'), 0);
+
+      function loop() {
+        if (!_ckEnabled || !_ckGL) return;
+        if (videoEl.readyState >= 2) {
+          const key = _ckColorKey === 'blue' ? [0.05, 0.09, 0.9] : [0.05, 0.9, 0.1];
+          gl.viewport(0, 0, _ckCanvas.width, _ckCanvas.height);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.enable(gl.BLEND);
+          gl.blendFunc(gl.ONE, gl.ZERO);
+          gl.bindTexture(gl.TEXTURE_2D, _ckTexture);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoEl);
+          gl.uniform3fv(uKey, key);
+          gl.uniform1f(uSim, _ckSimilarity);
+          gl.uniform1f(uSmt, _ckSmoothness);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          if (_ckThreeTexture) _ckThreeTexture.needsUpdate = true;
+        }
+        _ckRafId = requestAnimationFrame(loop);
+      }
+      _ckRafId = requestAnimationFrame(loop);
+    }
+
+    function stopCKLoop() {
+      if (_ckRafId) { cancelAnimationFrame(_ckRafId); _ckRafId = null; }
+      _ckCanvas = null;
+      _ckGL = null;
+      _ckProgram = null;
+      _ckTexture = null;
+      _ckThreeTexture = null;
+    }
+
+    function initAndStartCK(videoEl, scene) {
+      function tryApply(n) {
+        const plane = scene.querySelector('#ar-ck-plane');
+        if (!plane || !plane.isConnected) return;
+        const mesh = plane.getObject3D('mesh');
+        if (!mesh && n < 20) { setTimeout(() => tryApply(n + 1), 200); return; }
+        if (!mesh) return;
+
+        const w = videoEl.videoWidth  || 1280;
+        const h = videoEl.videoHeight || 720;
+        if (!_ckGL) setupCKGL(w, h);
+        if (!_ckGL) return;
+
+        _ckThreeTexture = new THREE.CanvasTexture(_ckCanvas);
+        _ckThreeTexture.flipY = false;
+        mesh.material.map = _ckThreeTexture;
+        mesh.material.transparent = true;
+        mesh.material.alphaTest = 0.01;
+        mesh.material.depthWrite = false;
+        mesh.material.needsUpdate = true;
+        startCKLoop(videoEl);
+      }
+      (function waitVideo(n) {
+        if (videoEl.videoWidth > 0) { tryApply(0); return; }
+        if (n < 20) setTimeout(() => waitVideo(n + 1), 250);
+        else tryApply(0);
+      })(0);
     }
 
     /* ══════════════════════════════════════
@@ -2024,6 +2297,7 @@
       _userPaused = false;
       document.removeEventListener('click', handleArTap);
       removePinchZoom();
+      stopCKLoop();
       _cameraStream = null;
       _cameraTrack = null;
       _hwZoomSupported = false;
@@ -2047,6 +2321,8 @@
 
     // ページ読み込み時にlocalStorageから復元
     loadRFSettings();
+    loadCKSettings();
+    syncCKPanel();
   </script>
 </body>
 </html>
