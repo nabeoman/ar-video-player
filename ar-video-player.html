@@ -1295,6 +1295,7 @@
         minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol
       }));
 
+      if (_ckEnabled) stopCKLoop();
       setupGUMOverride();
       const newScene = await rebuildScene(_currentVideoSrc);
       _dbgScene = newScene;
@@ -1385,7 +1386,7 @@
 
     function resetAdjust() {
       localStorage.removeItem(getAdjustKey());
-      const aVid = _dbgScene && _dbgScene.querySelector('a-video');
+      const aVid = _dbgTarget();
       if (aVid) {
         const baseH = parseFloat(document.getElementById('debug-info').dataset.baseH || _dbgH);
         aVid.setAttribute('height', baseH);
@@ -1949,6 +1950,7 @@
       _savedTrackStops.forEach(({ t, orig }) => { t.stop = orig; });
 
       // シーンを再構築（コンパイル済みバッファ使用のため高速）
+      if (_ckEnabled) stopCKLoop();
       setupGUMOverride();
       const newScene = await rebuildScene(_currentVideoSrc);
       _dbgScene = newScene;
@@ -2282,7 +2284,6 @@
         if (!_ckGL) return;
 
         _ckThreeTexture = new THREE.CanvasTexture(_ckCanvas);
-        _ckThreeTexture.flipY = false;
         mesh.material.map = _ckThreeTexture;
         mesh.material.transparent = true;
         mesh.material.alphaTest = 0.01;
