@@ -878,7 +878,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v2.1.0 &nbsp;·&nbsp; 2026-05-30</span>
+      <span class="version-badge">v2.2.0 &nbsp;·&nbsp; 2026-06-17</span>
     </div>
 
     <div class="steps-container">
@@ -961,7 +961,7 @@
         </div>
 
         <div class="tab-body" id="panel-url">
-          <input class="input-text" type="url" id="url-input" placeholder="https://example.com/video.mp4  または YouTube URL">
+          <input class="input-text" type="url" id="url-input" placeholder="https://example.com/video.mp4  または YouTube URL" oninput="_updateCKAvailability()">
           <p class="hint-text">YouTube URL（通常・ショート・限定公開）または CORS 対応の直接 MP4 URL を入力できます</p>
           <p class="hint-text" style="margin-top:0.3rem;color:#5c6ef5">YouTube は画面オーバーレイで再生されます（3D追従なし）</p>
         </div>
@@ -984,6 +984,7 @@
           <span style="font-size:0.72rem;color:#5c6ef5;background:rgba(92,110,245,0.13);padding:0.1rem 0.45rem;border-radius:4px;font-weight:700">NEW</span>
         </label>
         <p class="hint-text" style="margin-top:0.4rem;margin-left:1.5rem">グリーンバック／ブルーバック動画の背景を透過してAR合成します。調整パネルで色や透過範囲を変更できます。</p>
+        <p id="ck-yt-hint" class="hint-text" style="display:none;margin-top:0.3rem;margin-left:1.5rem;color:#e07050">YouTube はピクセル処理ができないためクロマキー非対応です</p>
       </div>
 
       <!-- ── Step 3: 開始 ── -->
@@ -1011,7 +1012,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v1.4.3</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.2.0</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -1413,6 +1414,20 @@
         el.classList.toggle('active', el.dataset.tab === tab));
       ['file', 'url', 'demo'].forEach(id =>
         document.getElementById('panel-' + id).classList.toggle('active', id === tab));
+      // URLタブ選択時はYouTube入力中の可能性があるため、CKチェックをリアルタイムで評価
+      _updateCKAvailability();
+    }
+
+    function _updateCKAvailability() {
+      const chk = document.getElementById('ck-enabled-chk');
+      if (!chk) return;
+      // URLタブでYouTube URLが入力されている場合はCK不可
+      const isYtMode = activeVideoTab === 'url' &&
+        extractYouTubeID(document.getElementById('url-input').value || '');
+      chk.disabled = !!isYtMode;
+      const hint = document.getElementById('ck-yt-hint');
+      if (hint) hint.style.display = isYtMode ? 'block' : 'none';
+      if (isYtMode) { _ckEnabled = false; chk.checked = false; syncCKPanel(); }
     }
 
     /* ══════════════════════════════════════
@@ -2006,11 +2021,13 @@
       const arVideo = document.getElementById('ar-video');
       if (!arVideo) return;
       const fsVideo = document.getElementById('fs-video');
-      if (arVideo.captureStream) {
-        fsVideo.srcObject = arVideo.captureStream();
+      // CKオン時は合成済みcanvasのストリームを使う（元動画は緑背景のまま）
+      const streamSrc = (_ckEnabled && _ckCanvas && _ckCanvas.captureStream)
+        ? _ckCanvas : arVideo;
+      if (streamSrc.captureStream) {
+        fsVideo.srcObject = streamSrc.captureStream();
         fsVideo.muted = false;
       } else {
-        // captureStream非対応ブラウザ用フォールバック
         fsVideo.src = arVideo.currentSrc;
         fsVideo.currentTime = arVideo.currentTime;
         fsVideo.muted = arVideo.muted;
