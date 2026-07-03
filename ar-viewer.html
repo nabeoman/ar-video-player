@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>AR Viewer</title>
+
+  <script>
+    /* ── 設定（この2行を変更するだけで動画・マーカーを差し替えられます） ── */
+    var VIEWER_MARKER_SRC = './hiro.png';
+    var VIEWER_VIDEO_SRC  = 'https://vjs.zencdn.net/v/oceans.mp4';
+    /* ────────────────────────────────────────────────────────────────── */
+
+    // iOS: video要素にplaysinline/muted/autoplay付与
+    (function() {
+      var _orig = document.createElement.bind(document);
+      document.createElement = function(tag) {
+        var el = _orig.apply(document, arguments);
+        if (typeof tag === 'string' && tag.toLowerCase() === 'video') {
+          el.setAttribute('playsinline', '');
+          el.setAttribute('webkit-playsinline', '');
+          el.setAttribute('muted', '');
+          el.setAttribute('autoplay', '');
+          el.muted = true;
+        }
+        return el;
+      };
+    })();
+
+    // fetch interceptor: dpdb.json抑止 + MindARターゲット配信
+    (function() {
+      var _fetch = window.fetch;
+      window.fetch = function(url, opts) {
+        if (typeof url === 'string') {
+          if (url.indexOf('dpdb.json') !== -1) {
+            return Promise.resolve(new Response('{"devices":[]}', {
+              headers: { 'Content-Type': 'application/json' }
+            }));
+          }
+          if (url.indexOf('mindar-target.mind') !== -1 && window._mindARBuffer) {
+            return Promise.resolve(new Response(window._mindARBuffer.slice(0)));
+          }
+        }
+        return _fetch.apply(this, arguments);
+      };
+      var _open = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function(method, url) {
+        if (typeof url === 'string' && url.indexOf('dpdb.json') !== -1) this._isDpdb = true;
+        return _open.apply(this, arguments);
+      };
+      var _send = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.send = function(data) {
+        if (!this._isDpdb) return _send.apply(this, arguments);
+        var self = this;
+        setTimeout(function() {
+          Object.defineProperty(self, 'readyState',   { get: function(){ return 4; }, configurable: true });
+          Object.defineProperty(self, 'status',       { get: function(){ return 200; }, configurable: true });
+          Object.defineProperty(self, 'responseText', { get: function(){ return '{"devices":[]}'; }, configurable: true });
+          Object.defineProperty(self, 'response',     { get: function(){ return '{"devices":[]}'; }, configurable: true });
+          if (typeof self.onreadystatechange === 'function') self.onreadystatechange();
+          if (typeof self.onload === 'function') self.onload(new ProgressEvent('load'));
+        }, 10);
+      };
+    })();
+  </script>
+
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0d0f1a; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; }
+
+    /* ── ランディング画面 ── */
+    #screen-landing {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      padding: 2rem 1.5rem;
+      gap: 2rem;
+      background: linear-gradient(160deg, #0d0f1a 0%, #151829 100%);
+    }
+    .landing-logo {
+      width: 64px; height: 64px;
+      background: rgba(92,110,245,0.15);
+      border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .landing-title { font-size: 1.6rem; font-weight: 700; color: #fff; text-align: center; }
+    .landing-sub   { font-size: 0.95rem; color: rgba(255,255,255,0.5); text-align: center; line-height: 1.6; }
+
+    .marker-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 1.25rem;
+      text-align: center;
+      width: 100%;
+      max-width: 280px;
+    }
+    .marker-card p { font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-bottom: 0.75rem; }
+    .marker-card img { width: 140px; height: 140px; border-radius: 8px; object-fit: contain; background: #fff; }
+
+    .btn-start {
+      width: 100%; max-width: 320px;
+      padding: 1rem;
+      background: linear-gradient(135deg, #5c6ef5, #7c4ef5);
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      box-shadow: 0 4px 20px rgba(92,110,245,0.4);
+      transition: opacity 0.2s;
+    }
+    .btn-start:disabled { opacity: 0.5; cursor: default; }
+    .btn-start:active   { opacity: 0.85; }
+
+    .https-note { font-size: 0.75rem; color: rgba(255,200,100,0.7); text-align: center; }
+
+    /* ── AR画面 ── */
+    #ar-viewport {
+      position: fixed; inset: 0; z-index: 0;
+      width: 100%; height: 100%;
+    }
+    #ar-viewport a-scene { width: 100% !important; height: 100% !important; }
+
+    #ar-status-bar {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 0.6rem 1rem;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      align-items: center; justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .status-badge {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.85rem; color: rgba(255,255,255,0.85); font-weight: 500;
+    }
+    .pulsedot {
+      width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    }
+    .pulsedot.searching {
+      background: #f59c1a;
+      animation: pulse 1.4s infinite;
+    }
+    .pulsedot.found { background: #4cdf80; animation: none; }
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.7); }
+    }
+    .btn-exit {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 0.8rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-exit:active { opacity: 0.7; }
+
+    #ar-tip {
+      position: fixed; bottom: 2.5rem; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.55);
+      color: rgba(255,255,255,0.8);
+      font-size: 0.85rem;
+      padding: 0.55rem 1.2rem;
+      border-radius: 20px;
+      z-index: 100;
+      pointer-events: none;
+      white-space: nowrap;
+      backdrop-filter: blur(6px);
+      transition: opacity 0.3s;
+    }
+    #ar-tip.hidden { opacity: 0; }
+  </style>
+</head>
+<body>
+
+  <!-- AR レンダリングコンテナ -->
+  <div id="ar-viewport"></div>
+
+  <!-- AR ステータスバー -->
+  <div id="ar-status-bar">
+    <div class="status-badge">
+      <div class="pulsedot searching" id="pulsedot"></div>
+      <span id="status-label">マーカーを探しています...</span>
+    </div>
+    <button class="btn-exit" onclick="stopAR()">✕ 終了</button>
+  </div>
+
+  <div id="ar-tip">印刷した画像にカメラを向けてください</div>
+
+  <!-- ランディング画面 -->
+  <div id="screen-landing">
+    <div class="landing-logo">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#5c6ef5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+      </svg>
+    </div>
+
+    <div>
+      <div class="landing-title">AR体験</div>
+      <div class="landing-sub" style="margin-top:0.5rem">下のマーカー画像を印刷してカメラで<br>かざすと映像が表示されます</div>
+    </div>
+
+    <div class="marker-card">
+      <p>▼ このマーカー画像を使います</p>
+      <img id="marker-preview" src="./hiro.png" alt="ARマーカー">
+    </div>
+
+    <button class="btn-start" id="btn-start" onclick="startAR()">
+      カメラを起動して AR を体験 →
+    </button>
+
+    <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
+  </div>
+
+  <script>
+    const MINDAR_HEIGHT_CORRECTION = 1.071;
+
+    let _cameraStream   = null;
+    let _compiledBuffer = null;
+    let _markerVisible  = false;
+    let _userPaused     = false;
+    let _audioEnabled   = true;
+
+    async function startAR() {
+      const btn = document.getElementById('btn-start');
+      btn.disabled = true;
+
+      try {
+        // カメラ取得
+        btn.textContent = 'カメラにアクセス中...';
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, frameRate: { ideal: 60, min: 30 } },
+            audio: false
+          });
+        } catch(e) {
+          alert('カメラへのアクセスができません。\nブラウザの設定でカメラを許可してください。\n(' + e.name + ')');
+          return;
+        }
+        _cameraStream = stream;
+
+        // GUM Override（MindARに取得済みストリームを渡す）
+        setupGUMOverride();
+
+        // マーカー画像コンパイル（初回のみ）
+        if (!_compiledBuffer) {
+          btn.textContent = '画像を解析中...';
+          const img = await loadImage(VIEWER_MARKER_SRC, 'anonymous');
+          _compiledBuffer = await compileMarker(img);
+        }
+        window._mindARBuffer = _compiledBuffer;
+
+        // シーン構築
+        btn.textContent = 'AR を初期化中...';
+        const scene = await buildScene(VIEWER_VIDEO_SRC);
+
+        // 動画ロード待ち
+        const vid = scene.querySelector('#ar-video');
+        if (vid && vid.readyState < 3) {
+          btn.textContent = '動画を読み込み中...';
+          await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('動画の読み込みがタイムアウトしました')), 15000);
+            vid.addEventListener('canplay', () => { clearTimeout(timer); resolve(); }, { once: true });
+            vid.addEventListener('error',   () => { clearTimeout(timer); reject(new Error('動画を読み込めませんでした')); }, { once: true });
+          });
+        }
+
+        // アスペクト比設定
+        (function applyRatio(n) {
+          if (!scene.isConnected) return;
+          const v2 = scene.querySelector('#ar-video');
+          const av = scene.querySelector('a-video');
+          if (v2 && av && v2.videoWidth > 0) {
+            const h = (v2.videoHeight / v2.videoWidth) * MINDAR_HEIGHT_CORRECTION;
+            av.setAttribute('height', h);
+            av.setAttribute('position', '0 -0.06 0.001');
+          } else if (n < 19) {
+            setTimeout(() => applyRatio(n + 1), 250);
+          }
+        })(0);
+
+        // HUD表示
+        document.getElementById('screen-landing').style.display = 'none';
+        document.getElementById('ar-status-bar').style.display = 'flex';
+        document.getElementById('ar-tip').style.display = 'block';
+        document.getElementById('ar-tip').classList.remove('hidden');
+        document.getElementById('pulsedot').className = 'pulsedot searching';
+        document.getElementById('status-label').textContent = 'マーカーを探しています...';
+
+        document.addEventListener('click', handleTap);
+        setTimeout(() => attachEvents(), 1000);
+
+      } catch(e) {
+        console.error(e);
+        const failedScene = document.querySelector('a-scene');
+        if (failedScene) failedScene.remove();
+        document.getElementById('screen-landing').style.display = 'flex';
+        document.getElementById('ar-status-bar').style.display = 'none';
+        document.getElementById('ar-tip').style.display = 'none';
+        alert('AR の起動に失敗しました。\n' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'カメラを起動して AR を体験 →';
+      }
+    }
+
+    function stopAR() {
+      const scene = document.getElementById('main-scene');
+      if (scene) {
+        const sys = scene.systems && scene.systems['mindar-image-system'];
+        if (sys) try { sys.stop(); } catch(e) {}
+        scene.remove();
+      }
+      const vid = document.getElementById('ar-video');
+      if (vid) vid.pause();
+      if (_cameraStream) { _cameraStream.getTracks().forEach(t => t.stop()); _cameraStream = null; }
+      document.removeEventListener('click', handleTap);
+      _markerVisible = false;
+      _userPaused = false;
+      document.getElementById('ar-status-bar').style.display = 'none';
+      document.getElementById('ar-tip').style.display = 'none';
+      document.getElementById('screen-landing').style.display = 'flex';
+    }
+
+    function setupGUMOverride() {
+      if (!_cameraStream) return;
+      const stream = _cameraStream;
+      const _orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      let handed = false;
+      navigator.mediaDevices.getUserMedia = function(c) {
+        if (!handed) { handed = true; navigator.mediaDevices.getUserMedia = _orig; return Promise.resolve(stream); }
+        return _orig(c);
+      };
+    }
+
+    function buildScene(videoSrc) {
+      return new Promise(resolve => {
+        const old = document.querySelector('a-scene');
+        if (old) old.remove();
+        setupGUMOverride();
+
+        const scene = document.createElement('a-scene');
+        scene.id = 'main-scene';
+        scene.setAttribute('mindar-image', 'imageTargetSrc: ./mindar-target.mind; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: 0.1; filterBeta: 1000; missTolerance: 10; warmupTolerance: 3');
+        scene.setAttribute('renderer', 'antialias: false; physicallyCorrectLights: false');
+        scene.setAttribute('vr-mode-ui', 'enabled: false');
+        scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+        scene.innerHTML = `
+          <a-assets timeout="30000">
+            <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline preload="auto"
+              crossorigin="anonymous" webkit-playsinline="true"></video>
+          </a-assets>
+          <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+          <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+            <a-video src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001"></a-video>
+          </a-entity>
+        `;
+        document.getElementById('ar-viewport').appendChild(scene);
+
+        let done = false;
+        const finish = () => { if (!done) { done = true; resolve(scene); } };
+        scene.addEventListener('loaded', finish, { once: true });
+        setTimeout(finish, 4000);
+      });
+    }
+
+    function attachEvents() {
+      const target = document.getElementById('ar-target');
+      if (!target) { setTimeout(attachEvents, 500); return; }
+      if (target._evts) return;
+      target._evts = true;
+
+      target.addEventListener('targetFound', () => {
+        _markerVisible = true;
+        _userPaused = false;
+        document.getElementById('pulsedot').className = 'pulsedot found';
+        document.getElementById('status-label').textContent = '動画を再生中';
+        document.getElementById('ar-tip').classList.add('hidden');
+        const vid = document.getElementById('ar-video');
+        if (vid) { vid.muted = false; vid.play().catch(() => { vid.muted = true; }); }
+      });
+
+      target.addEventListener('targetLost', () => {
+        _markerVisible = false;
+        document.getElementById('pulsedot').className = 'pulsedot searching';
+        document.getElementById('status-label').textContent = 'マーカーを探しています...';
+        document.getElementById('ar-tip').classList.remove('hidden');
+        const vid = document.getElementById('ar-video');
+        if (vid) vid.muted = true;
+      });
+    }
+
+    function handleTap(e) {
+      if (!_markerVisible) return;
+      if (e.target.closest('button')) return;
+      const vid = document.getElementById('ar-video');
+      if (!vid) return;
+      if (_userPaused) {
+        _userPaused = false;
+        vid.muted = false;
+        vid.play().catch(() => {});
+        document.getElementById('status-label').textContent = '動画を再生中';
+      } else {
+        _userPaused = true;
+        vid.pause();
+        document.getElementById('status-label').textContent = '一時停止中 — タップで再生';
+      }
+    }
+
+    function loadImage(src, crossOrigin) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        if (crossOrigin) img.crossOrigin = crossOrigin;
+        img.onload  = () => resolve(img);
+        img.onerror = () => reject(new Error('マーカー画像を読み込めませんでした'));
+        img.src = src;
+      });
+    }
+
+    async function compileMarker(imgEl) {
+      const compiler = new MINDAR.IMAGE.Compiler();
+      await compiler.compileImageTargets([imgEl], () => {});
+      const buf = await compiler.exportData();
+      return buf;
+    }
+  </script>
+</body>
+</html>
