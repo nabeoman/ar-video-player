@@ -1006,59 +1006,59 @@
 
     <!-- ── ビューワー設定 ── -->
     <div style="width:100%;max-width:480px;margin-top:2rem">
-      <button onclick="toggleViewerPanel()" style="width:100%;background:none;border:1px solid var(--border);border-radius:10px;padding:0.7rem 1rem;color:rgba(255,255,255,0.5);font-size:0.85rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:0.5rem">
+      <button onclick="toggleViewerPanel()" style="width:100%;background:var(--surface);border:1px solid var(--border-hover);border-radius:10px;padding:0.7rem 1rem;color:var(--text);font-size:0.85rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:0.5rem">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
         ビューワー設定（関係者共有用）
         <span id="viewer-panel-arrow" style="margin-left:auto">▼</span>
       </button>
 
-      <div id="viewer-panel" style="display:none;margin-top:0.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;display:none;flex-direction:column;gap:1rem">
+      <div id="viewer-panel" style="display:none;margin-top:0.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;flex-direction:column;gap:1rem">
 
         <!-- GitHub Token -->
         <div>
-          <p style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-bottom:0.4rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">GitHub Token</p>
+          <p style="font-size:0.78rem;color:#888;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">GitHub Token</p>
           <div style="display:flex;gap:0.5rem">
             <input type="password" id="gh-token-input" placeholder="github_pat_xxxxxxxx"
-              style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;color:#fff;font-size:0.85rem;outline:none">
-            <button onclick="saveGHToken()" style="background:rgba(92,110,245,0.3);border:1px solid rgba(92,110,245,0.5);border-radius:8px;padding:0.55rem 0.9rem;color:#fff;font-size:0.82rem;cursor:pointer;white-space:nowrap">保存</button>
+              style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;color:var(--text);font-size:0.85rem;outline:none">
+            <button onclick="saveGHToken()" style="background:#5c6ef5;border:none;border-radius:8px;padding:0.55rem 0.9rem;color:#fff;font-size:0.82rem;cursor:pointer;white-space:nowrap">保存</button>
           </div>
-          <p id="gh-token-status" style="font-size:0.75rem;color:rgba(92,245,150,0.8);margin-top:0.3rem;display:none"></p>
+          <p id="gh-token-status" style="font-size:0.75rem;margin-top:0.3rem;display:none"></p>
         </div>
 
         <!-- マーカー画像アップロード -->
         <div>
-          <p style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-bottom:0.4rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">マーカー画像</p>
+          <p style="font-size:0.78rem;color:#888;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">マーカー画像</p>
           <div style="display:flex;gap:0.5rem;align-items:center">
-            <label style="flex:1;background:rgba(255,255,255,0.06);border:1px dashed var(--border);border-radius:8px;padding:0.55rem 0.75rem;color:rgba(255,255,255,0.5);font-size:0.82rem;cursor:pointer;text-align:center">
+            <label style="flex:1;background:var(--surface2);border:1px dashed var(--border-hover);border-radius:8px;padding:0.55rem 0.75rem;color:#888;font-size:0.82rem;cursor:pointer;text-align:center">
               <input type="file" id="viewer-marker-input" accept="image/*" style="display:none" onchange="onViewerMarkerSelected(this)">
               <span id="viewer-marker-label">クリックして選択</span>
             </label>
-            <button onclick="uploadViewerMarker()" id="btn-upload-marker" style="background:rgba(92,110,245,0.3);border:1px solid rgba(92,110,245,0.5);border-radius:8px;padding:0.55rem 0.9rem;color:#fff;font-size:0.82rem;cursor:pointer;white-space:nowrap;opacity:0.4" disabled>アップロード</button>
+            <button onclick="uploadViewerMarker()" id="btn-upload-marker" style="background:#5c6ef5;border:none;border-radius:8px;padding:0.55rem 0.9rem;color:#fff;font-size:0.82rem;cursor:pointer;white-space:nowrap;opacity:0.4" disabled>アップロード</button>
           </div>
           <p id="viewer-marker-status" style="font-size:0.75rem;margin-top:0.3rem;display:none"></p>
         </div>
 
         <!-- 動画ファイルアップロード -->
         <div>
-          <p style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-bottom:0.4rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">動画ファイル <span style="font-weight:400;text-transform:none;color:rgba(255,255,255,0.3)">（10MB以内推奨）</span></p>
+          <p style="font-size:0.78rem;color:#888;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">動画ファイル <span style="font-weight:400;text-transform:none;color:#aaa">（10MB以内推奨）</span></p>
           <div style="display:flex;gap:0.5rem;align-items:center">
-            <label style="flex:1;background:rgba(255,255,255,0.06);border:1px dashed var(--border);border-radius:8px;padding:0.55rem 0.75rem;color:rgba(255,255,255,0.5);font-size:0.82rem;cursor:pointer;text-align:center">
+            <label style="flex:1;background:var(--surface2);border:1px dashed var(--border-hover);border-radius:8px;padding:0.55rem 0.75rem;color:#888;font-size:0.82rem;cursor:pointer;text-align:center">
               <input type="file" id="viewer-video-input" accept="video/*" style="display:none" onchange="onViewerVideoSelected(this)">
               <span id="viewer-video-label">クリックして選択</span>
             </label>
-            <button onclick="uploadViewerVideo()" id="btn-upload-video" style="background:rgba(92,110,245,0.3);border:1px solid rgba(92,110,245,0.5);border-radius:8px;padding:0.55rem 0.9rem;color:#fff;font-size:0.82rem;cursor:pointer;white-space:nowrap;opacity:0.4" disabled>アップロード</button>
+            <button onclick="uploadViewerVideo()" id="btn-upload-video" style="background:#5c6ef5;border:none;border-radius:8px;padding:0.55rem 0.9rem;color:#fff;font-size:0.82rem;cursor:pointer;white-space:nowrap;opacity:0.4" disabled>アップロード</button>
           </div>
           <p id="viewer-video-status" style="font-size:0.75rem;margin-top:0.3rem;display:none"></p>
         </div>
 
         <!-- ビューワーURL -->
-        <div style="background:rgba(92,110,245,0.08);border:1px solid rgba(92,110,245,0.2);border-radius:8px;padding:0.75rem">
-          <p style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:0.35rem">ビューワーURL（関係者に共有）</p>
+        <div style="background:rgba(92,110,245,0.07);border:1px solid rgba(92,110,245,0.2);border-radius:8px;padding:0.75rem">
+          <p style="font-size:0.75rem;color:#888;margin-bottom:0.35rem">ビューワーURL（関係者に共有）</p>
           <div style="display:flex;gap:0.5rem;align-items:center">
-            <code style="flex:1;font-size:0.75rem;color:rgba(255,255,255,0.7);word-break:break-all;line-height:1.5">https://nabeoman.github.io/ar-video-player/ar-viewer.html</code>
-            <button onclick="copyViewerURL()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:0.4rem 0.7rem;color:#fff;font-size:0.75rem;cursor:pointer;white-space:nowrap">コピー</button>
+            <code style="flex:1;font-size:0.75rem;color:#5c6ef5;word-break:break-all;line-height:1.5">https://nabeoman.github.io/ar-video-player/ar-viewer.html</code>
+            <button onclick="copyViewerURL()" style="background:var(--surface2);border:1px solid var(--border-hover);border-radius:6px;padding:0.4rem 0.7rem;color:var(--text);font-size:0.75rem;cursor:pointer;white-space:nowrap">コピー</button>
           </div>
-          <p id="copy-url-msg" style="font-size:0.72rem;color:rgba(92,245,150,0.8);margin-top:0.3rem;display:none">✓ コピーしました</p>
+          <p id="copy-url-msg" style="font-size:0.72rem;color:green;margin-top:0.3rem;display:none">✓ コピーしました</p>
         </div>
 
       </div>
