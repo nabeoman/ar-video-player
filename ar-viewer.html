@@ -227,11 +227,120 @@
   <script>
     const MINDAR_HEIGHT_CORRECTION = 1.071;
 
+    // URLパラメータからCK設定を読み取る
+    (function() {
+      const p = new URLSearchParams(location.search);
+      window._CK_ENABLED  = p.get('ck') === '1';
+      window._CK_COLOR    = p.get('ckColor') || 'green';
+      window._CK_SIM      = parseFloat(p.get('ckSim'))  || 0.40;
+      window._CK_SMT      = parseFloat(p.get('ckSmt'))  || 0.08;
+    })();
+
     let _cameraStream   = null;
     let _compiledBuffer = null;
     let _markerVisible  = false;
     let _userPaused     = false;
     let _audioEnabled   = true;
+
+    // CK用変数
+    let _ckCanvas  = null;
+    let _ckGL      = null;
+    let _ckProgram = null;
+    let _ckTexture = null;
+    let _ckRafId   = null;
+    let _ckThreeTex = null;
+
+    function setupCKGL(w, h) {
+      _ckCanvas = document.createElement('canvas');
+      _ckCanvas.width = w; _ckCanvas.height = h;
+      const gl = _ckCanvas.getContext('webgl') || _ckCanvas.getContext('experimental-webgl');
+      if (!gl) return;
+      _ckGL = gl;
+      const vs = gl.createShader(gl.VERTEX_SHADER);
+      gl.shaderSource(vs, 'attribute vec2 a_pos;attribute vec2 a_uv;varying vec2 v_uv;void main(){gl_Position=vec4(a_pos,0.0,1.0);v_uv=a_uv;}');
+      gl.compileShader(vs);
+      const fs = gl.createShader(gl.FRAGMENT_SHADER);
+      gl.shaderSource(fs, 'precision mediump float;uniform sampler2D u_tex;uniform vec3 u_key;uniform float u_sim;uniform float u_smt;varying vec2 v_uv;void main(){vec4 c=texture2D(u_tex,v_uv);float d=length(c.rgb-u_key);float a=smoothstep(u_sim,u_sim+u_smt,d);gl_FragColor=vec4(c.rgb,a);}');
+      gl.compileShader(fs);
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+      _ckProgram = prog;
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,0,1, 1,-1,1,1, -1,1,0,0, 1,1,1,0]), gl.STATIC_DRAW);
+      const aPos = gl.getAttribLocation(prog, 'a_pos');
+      const aUv  = gl.getAttribLocation(prog, 'a_uv');
+      gl.enableVertexAttribArray(aPos); gl.enableVertexAttribArray(aUv);
+      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 16, 0);
+      gl.vertexAttribPointer(aUv,  2, gl.FLOAT, false, 16, 8);
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      _ckTexture = tex;
+    }
+
+    function startCKLoop(videoEl) {
+      if (_ckRafId) cancelAnimationFrame(_ckRafId);
+      const gl = _ckGL;
+      if (!gl) return;
+      gl.useProgram(_ckProgram);
+      const uKey = gl.getUniformLocation(_ckProgram, 'u_key');
+      const uSim = gl.getUniformLocation(_ckProgram, 'u_sim');
+      const uSmt = gl.getUniformLocation(_ckProgram, 'u_smt');
+      gl.uniform1i(gl.getUniformLocation(_ckProgram, 'u_tex'), 0);
+      const key = window._CK_COLOR === 'blue' ? [0.05, 0.09, 0.9] : [0.05, 0.9, 0.1];
+      function loop() {
+        if (!_ckGL) return;
+        if (videoEl.readyState >= 2) {
+          gl.viewport(0, 0, _ckCanvas.width, _ckCanvas.height);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ZERO);
+          gl.bindTexture(gl.TEXTURE_2D, _ckTexture);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoEl);
+          gl.uniform3fv(uKey, key);
+          gl.uniform1f(uSim, window._CK_SIM);
+          gl.uniform1f(uSmt, window._CK_SMT);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          if (_ckThreeTex) _ckThreeTex.needsUpdate = true;
+        }
+        _ckRafId = requestAnimationFrame(loop);
+      }
+      _ckRafId = requestAnimationFrame(loop);
+    }
+
+    function stopCKLoop() {
+      if (_ckRafId) { cancelAnimationFrame(_ckRafId); _ckRafId = null; }
+      _ckCanvas = null; _ckGL = null; _ckProgram = null; _ckTexture = null; _ckThreeTex = null;
+    }
+
+    function initAndStartCK(videoEl, scene) {
+      function tryApply(n) {
+        const plane = scene.querySelector('#ar-ck-plane');
+        if (!plane || !plane.isConnected) return;
+        const mesh = plane.getObject3D('mesh');
+        if (!mesh && n < 20) { setTimeout(() => tryApply(n + 1), 200); return; }
+        if (!mesh) return;
+        const w = videoEl.videoWidth || 1280;
+        const h = videoEl.videoHeight || 720;
+        if (!_ckGL) setupCKGL(w, h);
+        if (!_ckGL) return;
+        _ckThreeTex = new THREE.CanvasTexture(_ckCanvas);
+        mesh.material.map = _ckThreeTex;
+        mesh.material.transparent = true;
+        mesh.material.alphaTest = 0.01;
+        mesh.material.depthWrite = false;
+        mesh.material.needsUpdate = true;
+        startCKLoop(videoEl);
+      }
+      (function waitVideo(n) {
+        if (videoEl.videoWidth > 0) { tryApply(0); return; }
+        if (n < 20) setTimeout(() => waitVideo(n + 1), 250);
+        else tryApply(0);
+      })(0);
+    }
 
     async function startAR() {
       const btn = document.getElementById('btn-start');
@@ -278,11 +387,16 @@
           });
         }
 
+        // CK初期化
+        if (window._CK_ENABLED && vid) {
+          initAndStartCK(vid, scene);
+        }
+
         // アスペクト比設定
         (function applyRatio(n) {
           if (!scene.isConnected) return;
           const v2 = scene.querySelector('#ar-video');
-          const av = scene.querySelector('a-video');
+          const av = scene.querySelector(window._CK_ENABLED ? '#ar-ck-plane' : 'a-video');
           if (v2 && av && v2.videoWidth > 0) {
             const h = (v2.videoHeight / v2.videoWidth) * MINDAR_HEIGHT_CORRECTION;
             av.setAttribute('height', h);
@@ -318,6 +432,7 @@
     }
 
     function stopAR() {
+      stopCKLoop();
       const scene = document.getElementById('main-scene');
       if (scene) {
         const sys = scene.systems && scene.systems['mindar-image-system'];
@@ -358,14 +473,20 @@
         scene.setAttribute('renderer', 'antialias: false; physicallyCorrectLights: false');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+
+        const videoStyle = window._CK_ENABLED ? 'style="display:none"' : '';
+        const planeEl = window._CK_ENABLED
+          ? `<a-plane id="ar-ck-plane" width="1" height="0.5625" position="0 -0.06 0.001" material="transparent:true;alphaTest:0.01;depthWrite:false"></a-plane>`
+          : `<a-video src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001"></a-video>`;
+
         scene.innerHTML = `
           <a-assets timeout="30000">
             <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline preload="auto"
-              crossorigin="anonymous" webkit-playsinline="true"></video>
+              crossorigin="anonymous" webkit-playsinline="true" ${videoStyle}></video>
           </a-assets>
           <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
           <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
-            <a-video src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001"></a-video>
+            ${planeEl}
           </a-entity>
         `;
         document.getElementById('ar-viewport').appendChild(scene);

@@ -1055,7 +1055,7 @@
         <div style="background:rgba(92,110,245,0.07);border:1px solid rgba(92,110,245,0.2);border-radius:8px;padding:0.75rem">
           <p style="font-size:0.75rem;color:#888;margin-bottom:0.35rem">ビューワーURL（関係者に共有）</p>
           <div style="display:flex;gap:0.5rem;align-items:center">
-            <code style="flex:1;font-size:0.75rem;color:#5c6ef5;word-break:break-all;line-height:1.5">https://nabeoman.github.io/ar-video-player/ar-viewer.html</code>
+            <code id="viewer-url-display" style="flex:1;font-size:0.75rem;color:#5c6ef5;word-break:break-all;line-height:1.5">https://nabeoman.github.io/ar-video-player/ar-viewer.html</code>
             <button onclick="copyViewerURL()" style="background:var(--surface2);border:1px solid var(--border-hover);border-radius:6px;padding:0.4rem 0.7rem;color:var(--text);font-size:0.75rem;cursor:pointer;white-space:nowrap">コピー</button>
           </div>
           <p id="copy-url-msg" style="font-size:0.72rem;color:green;margin-top:0.3rem;display:none">✓ コピーしました</p>
@@ -2417,12 +2417,30 @@
       }
     }
 
+    function buildViewerURL() {
+      const base = 'https://nabeoman.github.io/ar-video-player/ar-viewer.html';
+      if (!_ckEnabled) return base;
+      const p = new URLSearchParams({
+        ck: '1',
+        ckColor: _ckColorKey,
+        ckSim: _ckSimilarity.toFixed(2),
+        ckSmt: _ckSmoothness.toFixed(2)
+      });
+      return base + '?' + p.toString();
+    }
+
+    function refreshViewerURL() {
+      const el = document.getElementById('viewer-url-display');
+      if (el) el.textContent = buildViewerURL();
+    }
+
     function toggleViewerPanel() {
       const panel = document.getElementById('viewer-panel');
       const arrow = document.getElementById('viewer-panel-arrow');
       const isOpen = panel.style.display === 'flex';
       panel.style.display = isOpen ? 'none' : 'flex';
       arrow.textContent = isOpen ? '▼' : '▲';
+      if (!isOpen) refreshViewerURL();
     }
 
     function saveGHToken() {
@@ -2545,7 +2563,7 @@
     }
 
     function copyViewerURL() {
-      const url = 'https://nabeoman.github.io/ar-video-player/ar-viewer.html';
+      const url = buildViewerURL();
       navigator.clipboard.writeText(url).then(() => {
         const el = document.getElementById('copy-url-msg');
         el.style.display = 'block';
