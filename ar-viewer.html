@@ -367,7 +367,12 @@
         // マーカー画像コンパイル（初回のみ）
         if (!_compiledBuffer) {
           btn.textContent = '画像を解析中...';
-          const img = await loadImage(VIEWER_MARKER_SRC, 'anonymous');
+          let img;
+          try {
+            img = await loadImage(VIEWER_MARKER_SRC, 'anonymous');
+          } catch(e) {
+            img = await loadImage('./hiro.png', 'anonymous');
+          }
           _compiledBuffer = await compileMarker(img);
         }
         window._mindARBuffer = _compiledBuffer;
