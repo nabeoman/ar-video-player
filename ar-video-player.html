@@ -1003,6 +1003,66 @@
 
     <button class="btn-start" id="btn-start" onclick="startAR()">カメラを起動して AR を開始 →</button>
     <p class="https-note">⚠ カメラ機能は HTTPS または localhost 環境が必要です</p>
+
+    <!-- ── ビューワー設定 ── -->
+    <div style="width:100%;max-width:480px;margin-top:2rem">
+      <button onclick="toggleViewerPanel()" style="width:100%;background:none;border:1px solid var(--border);border-radius:10px;padding:0.7rem 1rem;color:rgba(255,255,255,0.5);font-size:0.85rem;cursor:pointer;text-align:left;display:flex;align-items:center;gap:0.5rem">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        ビューワー設定（関係者共有用）
+        <span id="viewer-panel-arrow" style="margin-left:auto">▼</span>
+      </button>
+
+      <div id="viewer-panel" style="display:none;margin-top:0.75rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;display:none;flex-direction:column;gap:1rem">
+
+        <!-- GitHub Token -->
+        <div>
+          <p style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-bottom:0.4rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">GitHub Token</p>
+          <div style="display:flex;gap:0.5rem">
+            <input type="password" id="gh-token-input" placeholder="github_pat_xxxxxxxx"
+              style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;color:#fff;font-size:0.85rem;outline:none">
+            <button onclick="saveGHToken()" style="background:rgba(92,110,245,0.3);border:1px solid rgba(92,110,245,0.5);border-radius:8px;padding:0.55rem 0.9rem;color:#fff;font-size:0.82rem;cursor:pointer;white-space:nowrap">保存</button>
+          </div>
+          <p id="gh-token-status" style="font-size:0.75rem;color:rgba(92,245,150,0.8);margin-top:0.3rem;display:none"></p>
+        </div>
+
+        <!-- マーカー画像アップロード -->
+        <div>
+          <p style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-bottom:0.4rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">マーカー画像</p>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <label style="flex:1;background:rgba(255,255,255,0.06);border:1px dashed var(--border);border-radius:8px;padding:0.55rem 0.75rem;color:rgba(255,255,255,0.5);font-size:0.82rem;cursor:pointer;text-align:center">
+              <input type="file" id="viewer-marker-input" accept="image/*" style="display:none" onchange="onViewerMarkerSelected(this)">
+              <span id="viewer-marker-label">クリックして選択</span>
+            </label>
+            <button onclick="uploadViewerMarker()" id="btn-upload-marker" style="background:rgba(92,110,245,0.3);border:1px solid rgba(92,110,245,0.5);border-radius:8px;padding:0.55rem 0.9rem;color:#fff;font-size:0.82rem;cursor:pointer;white-space:nowrap;opacity:0.4" disabled>アップロード</button>
+          </div>
+          <p id="viewer-marker-status" style="font-size:0.75rem;margin-top:0.3rem;display:none"></p>
+        </div>
+
+        <!-- 動画ファイルアップロード -->
+        <div>
+          <p style="font-size:0.78rem;color:rgba(255,255,255,0.45);margin-bottom:0.4rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">動画ファイル <span style="font-weight:400;text-transform:none;color:rgba(255,255,255,0.3)">（10MB以内推奨）</span></p>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <label style="flex:1;background:rgba(255,255,255,0.06);border:1px dashed var(--border);border-radius:8px;padding:0.55rem 0.75rem;color:rgba(255,255,255,0.5);font-size:0.82rem;cursor:pointer;text-align:center">
+              <input type="file" id="viewer-video-input" accept="video/*" style="display:none" onchange="onViewerVideoSelected(this)">
+              <span id="viewer-video-label">クリックして選択</span>
+            </label>
+            <button onclick="uploadViewerVideo()" id="btn-upload-video" style="background:rgba(92,110,245,0.3);border:1px solid rgba(92,110,245,0.5);border-radius:8px;padding:0.55rem 0.9rem;color:#fff;font-size:0.82rem;cursor:pointer;white-space:nowrap;opacity:0.4" disabled>アップロード</button>
+          </div>
+          <p id="viewer-video-status" style="font-size:0.75rem;margin-top:0.3rem;display:none"></p>
+        </div>
+
+        <!-- ビューワーURL -->
+        <div style="background:rgba(92,110,245,0.08);border:1px solid rgba(92,110,245,0.2);border-radius:8px;padding:0.75rem">
+          <p style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:0.35rem">ビューワーURL（関係者に共有）</p>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <code style="flex:1;font-size:0.75rem;color:rgba(255,255,255,0.7);word-break:break-all;line-height:1.5">https://nabeoman.github.io/ar-video-player/ar-viewer.html</code>
+            <button onclick="copyViewerURL()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:0.4rem 0.7rem;color:#fff;font-size:0.75rem;cursor:pointer;white-space:nowrap">コピー</button>
+          </div>
+          <p id="copy-url-msg" style="font-size:0.72rem;color:rgba(92,245,150,0.8);margin-top:0.3rem;display:none">✓ コピーしました</p>
+        </div>
+
+      </div>
+    </div>
   </div>
 
   <!-- ===== PRINT-ONLY: Hiro ===== -->
@@ -2341,6 +2401,157 @@
     loadRFSettings();
     loadCKSettings();
     syncCKPanel();
+    initViewerPanel();
+
+    /* ══════════════════════════════════════
+       ビューワー設定パネル
+    ══════════════════════════════════════ */
+    const GH_OWNER = 'nabeoman';
+    const GH_REPO  = 'ar-video-player';
+
+    function initViewerPanel() {
+      const token = localStorage.getItem('gh-pat');
+      if (token) {
+        document.getElementById('gh-token-input').value = '●'.repeat(20);
+        showGHTokenStatus('✓ トークン保存済み');
+      }
+    }
+
+    function toggleViewerPanel() {
+      const panel = document.getElementById('viewer-panel');
+      const arrow = document.getElementById('viewer-panel-arrow');
+      const isOpen = panel.style.display === 'flex';
+      panel.style.display = isOpen ? 'none' : 'flex';
+      arrow.textContent = isOpen ? '▼' : '▲';
+    }
+
+    function saveGHToken() {
+      const val = document.getElementById('gh-token-input').value.trim();
+      if (!val || val.startsWith('●')) { showGHTokenStatus('トークンを入力してください', true); return; }
+      localStorage.setItem('gh-pat', val);
+      document.getElementById('gh-token-input').value = '●'.repeat(20);
+      showGHTokenStatus('✓ 保存しました');
+    }
+
+    function showGHTokenStatus(msg, isError) {
+      const el = document.getElementById('gh-token-status');
+      el.textContent = msg;
+      el.style.color = isError ? 'rgba(255,100,100,0.9)' : 'rgba(92,245,150,0.8)';
+      el.style.display = 'block';
+    }
+
+    function onViewerMarkerSelected(input) {
+      const file = input.files[0];
+      if (!file) return;
+      document.getElementById('viewer-marker-label').textContent = file.name;
+      const btn = document.getElementById('btn-upload-marker');
+      btn.disabled = false; btn.style.opacity = '1';
+    }
+
+    function onViewerVideoSelected(input) {
+      const file = input.files[0];
+      if (!file) return;
+      document.getElementById('viewer-video-label').textContent = file.name;
+      const mb = (file.size / 1024 / 1024).toFixed(1);
+      const el = document.getElementById('viewer-video-status');
+      el.style.display = 'block';
+      if (file.size > 100 * 1024 * 1024) {
+        el.textContent = `⚠ ${mb}MB — GitHubの上限(100MB)を超えています`;
+        el.style.color = 'rgba(255,100,100,0.9)';
+      } else if (file.size > 10 * 1024 * 1024) {
+        el.textContent = `⚠ ${mb}MB — 10MB超。読み込みが遅くなる可能性があります`;
+        el.style.color = 'rgba(255,200,80,0.9)';
+      } else {
+        el.textContent = `${mb}MB`;
+        el.style.color = 'rgba(255,255,255,0.4)';
+      }
+      const btn = document.getElementById('btn-upload-video');
+      btn.disabled = file.size > 100 * 1024 * 1024;
+      btn.style.opacity = btn.disabled ? '0.4' : '1';
+    }
+
+    async function ghUpload(path, file, statusElId) {
+      const token = localStorage.getItem('gh-pat');
+      if (!token) { showStatus(statusElId, '⚠ GitHubトークンを先に保存してください', true); return false; }
+
+      showStatus(statusElId, '⟳ アップロード中...', false, 'rgba(255,255,255,0.5)');
+
+      // 既存ファイルのSHA取得（上書きに必要）
+      let sha = null;
+      try {
+        const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
+        });
+        if (res.ok) { const d = await res.json(); sha = d.sha; }
+      } catch(e) {}
+
+      // ファイルをBase64に変換
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = e => resolve(e.target.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      // GitHub Contents API でアップロード
+      const body = {
+        message: `update ${path} via admin panel`,
+        content: base64,
+        ...(sha ? { sha } : {})
+      };
+      const res = await fetch(`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) {
+        showStatus(statusElId, '✓ アップロード完了（GitHub Pages反映まで1〜2分）');
+        return true;
+      } else {
+        const err = await res.json();
+        showStatus(statusElId, `⚠ エラー: ${err.message}`, true);
+        return false;
+      }
+    }
+
+    async function uploadViewerMarker() {
+      const file = document.getElementById('viewer-marker-input').files[0];
+      if (!file) return;
+      const btn = document.getElementById('btn-upload-marker');
+      btn.disabled = true;
+      await ghUpload('viewer-marker.png', file, 'viewer-marker-status');
+      btn.disabled = false;
+    }
+
+    async function uploadViewerVideo() {
+      const file = document.getElementById('viewer-video-input').files[0];
+      if (!file) return;
+      const btn = document.getElementById('btn-upload-video');
+      btn.disabled = true;
+      await ghUpload('viewer-video.mp4', file, 'viewer-video-status');
+      btn.disabled = false;
+    }
+
+    function showStatus(elId, msg, isError, color) {
+      const el = document.getElementById(elId);
+      el.textContent = msg;
+      el.style.color = color || (isError ? 'rgba(255,100,100,0.9)' : 'rgba(92,245,150,0.8)');
+      el.style.display = 'block';
+    }
+
+    function copyViewerURL() {
+      const url = 'https://nabeoman.github.io/ar-video-player/ar-viewer.html';
+      navigator.clipboard.writeText(url).then(() => {
+        const el = document.getElementById('copy-url-msg');
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 2000);
+      });
+    }
   </script>
 </body>
 </html>
