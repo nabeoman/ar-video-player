@@ -880,7 +880,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v2.7.1 &nbsp;·&nbsp; 2026-07-14</span>
+      <span class="version-badge">v2.7.2 &nbsp;·&nbsp; 2026-07-14</span>
     </div>
 
     <div class="steps-container">
@@ -1074,7 +1074,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.7.1</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.7.2</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -1905,33 +1905,7 @@
           throw new Error('MindAR システムの初期化に失敗しました');
         }
 
-        // ── Step C-2: 動画バッファ確認 ──
-        if (!_ytVideoId && vid && vid.readyState < 3) {
-          btn.textContent = '動画を読み込み中...';
-          await new Promise((resolve, reject) => {
-            const onCanPlay = () => { cleanup(); resolve(); };
-            const onError   = () => {
-              cleanup();
-              const code = vid.error ? vid.error.code : '?';
-              reject(new Error(
-                code === 4
-                  ? '動画にアクセスできません。\nURLが正しいか、サーバーのCORS設定を確認してください。'
-                  : '動画の読み込みに失敗しました（エラーコード: ' + code + '）'
-              ));
-            };
-            const timer = setTimeout(() => {
-              cleanup();
-              reject(new Error('動画の読み込みがタイムアウトしました（15秒）。\nURLや接続環境を確認してください。'));
-            }, 15000);
-            function cleanup() {
-              vid.removeEventListener('canplay', onCanPlay);
-              vid.removeEventListener('error', onError);
-              clearTimeout(timer);
-            }
-            vid.addEventListener('canplay', onCanPlay);
-            vid.addEventListener('error', onError);
-          });
-        }
+
 
         // CK モード初期化
         if (_ckEnabled && !_ytVideoId && vid) {

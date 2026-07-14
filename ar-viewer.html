@@ -360,7 +360,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.7.1</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.7.2</p>
   </div>
 
   <script>
@@ -595,15 +595,7 @@
           throw new Error('MindAR システムの初期化に失敗しました');
         }
 
-        // 動画ロード待ち
-        if (vid && vid.readyState < 3) {
-          btn.textContent = '動画を読み込み中...';
-          await new Promise((resolve, reject) => {
-            const timer = setTimeout(() => reject(new Error('動画の読み込みがタイムアウトしました')), 15000);
-            vid.addEventListener('canplay', () => { clearTimeout(timer); resolve(); }, { once: true });
-            vid.addEventListener('error',   () => { clearTimeout(timer); reject(new Error('動画を読み込めませんでした')); }, { once: true });
-          });
-        }
+
 
         // CK初期化
         if (window._CK_ENABLED && vid) {
