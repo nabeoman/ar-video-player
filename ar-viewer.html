@@ -565,6 +565,19 @@
       const buf = await compiler.exportData();
       return buf;
     }
+
+    // ページ読み込み後にバックグラウンドでマーカーをコンパイル
+    window.addEventListener('load', () => {
+      setTimeout(async () => {
+        if (_compiledBuffer) return;
+        try {
+          let img;
+          try { img = await loadImage(VIEWER_MARKER_SRC, 'anonymous'); }
+          catch(e) { img = await loadImage('./hiro.png', 'anonymous'); }
+          _compiledBuffer = await compileMarker(img);
+        } catch(e) {}
+      }, 500);
+    });
   </script>
 </body>
 </html>
