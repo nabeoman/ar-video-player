@@ -365,7 +365,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.9.0</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.0.0</p>
   </div>
 
   <script>
@@ -516,6 +516,12 @@
           return;
         }
         _cameraStream = stream;
+        _cameraStream.getTracks().forEach(t => {
+          if (!t._origStop) {
+            t._origStop = t.stop.bind(t);
+            t.stop = function() {};
+          }
+        });
 
         // 一時的なvideo要素で再生をトリガーし、iOSのセキュリティロックを解除
         const tempVideo = document.createElement('video');
@@ -666,12 +672,20 @@
         if (sys) try { sys.stop(); } catch(e) {}
       }
       
-      const target = document.getElementById('ar-target');
-      if (target) target.innerHTML = '';
+      const avEl = document.getElementById('ar-video-el');
+      const planeEl = document.getElementById('ar-ck-plane');
+      if (avEl) avEl.setAttribute('visible', 'false');
+      if (planeEl) planeEl.setAttribute('visible', 'false');
 
       const vid = document.getElementById('ar-video');
       if (vid) vid.pause();
-      if (_cameraStream) { _cameraStream.getTracks().forEach(t => t.stop()); _cameraStream = null; }
+      if (_cameraStream) {
+        _cameraStream.getTracks().forEach(t => {
+          if (t._origStop) t.stop = t._origStop;
+          t.stop();
+        });
+        _cameraStream = null;
+      }
       document.removeEventListener('click', handleTap);
       removePinchZoom();
       _markerVisible = false;
@@ -791,24 +805,13 @@
       document.getElementById('status-label').textContent = '再確認中...';
       document.getElementById('ar-tip').classList.remove('hidden');
 
-      const _savedTrackStops = [];
-      if (_cameraStream) {
-        _cameraStream.getTracks().forEach(t => {
-          const orig = t.stop.bind(t);
-          _savedTrackStops.push({ t, orig });
-          t.stop = function() {};
-        });
-      }
-
       const oldScene = document.getElementById('main-scene');
       if (oldScene) {
         const sys = oldScene.systems && oldScene.systems['mindar-image-system'];
         if (sys) { try { sys.stop(); } catch(e) {} }
       }
 
-      await new Promise(r => setTimeout(r, 300));
-
-      _savedTrackStops.forEach(({ t, orig }) => { t.stop = orig; });
+      await new Promise(r => setTimeout(r, 100));
 
       if (window._CK_ENABLED) stopCKLoop();
       setupGUMOverride();

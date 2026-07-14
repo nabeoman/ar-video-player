@@ -898,7 +898,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v2.9.0 &nbsp;·&nbsp; 2026-07-14</span>
+      <span class="version-badge">v3.0.0 &nbsp;·&nbsp; 2026-07-14</span>
     </div>
 
     <div class="steps-container">
@@ -1092,7 +1092,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.9.0</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v3.0.0</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -1345,16 +1345,6 @@
       dot.classList.add('searching');
       document.getElementById('status-label').textContent = '再起動中...';
 
-      // sys.stop() より先にカメラトラックを保護
-      const _rfSavedStops = [];
-      if (_cameraStream) {
-        _cameraStream.getTracks().forEach(t => {
-          const orig = t.stop.bind(t);
-          _rfSavedStops.push({ t, orig });
-          t.stop = function() {};
-        });
-      }
-
       const scene = document.getElementById('main-scene');
       if (scene) {
         const system = scene.systems && scene.systems['mindar-image-system'];
@@ -1367,9 +1357,7 @@
         document.getElementById('yt-iframe').src = '';
       }
 
-      await new Promise(r => setTimeout(r, 400));
-
-      _rfSavedStops.forEach(({ t, orig }) => { t.stop = orig; });
+      await new Promise(r => setTimeout(r, 100));
 
       localStorage.setItem('ar-rf-settings', JSON.stringify({
         minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol
@@ -1816,6 +1804,12 @@
 
         // カメラトラック取得・ハードウェアズーム対応確認
         _cameraStream = cameraStream;
+        _cameraStream.getTracks().forEach(t => {
+          if (!t._origStop) {
+            t._origStop = t.stop.bind(t);
+            t.stop = function() {};
+          }
+        });
         _cameraTrack = cameraStream.getVideoTracks()[0];
         _hwZoomSupported = false;
         _hwZoomMin = 1.0; _hwZoomMax = 4.0;
@@ -2057,16 +2051,6 @@
       document.getElementById('status-label').textContent = '再確認中...';
       document.getElementById('ar-tip').classList.remove('hidden');
 
-      // ① sys.stop() より先にカメラトラックを保護
-      const _savedTrackStops = [];
-      if (_cameraStream) {
-        _cameraStream.getTracks().forEach(t => {
-          const orig = t.stop.bind(t);
-          _savedTrackStops.push({ t, orig });
-          t.stop = function() {};
-        });
-      }
-
       // 旧システムを停止
       const scene = document.getElementById('main-scene');
       if (scene) {
@@ -2074,10 +2058,7 @@
         if (sys) { try { sys.stop(); } catch(e) {} }
       }
 
-      await new Promise(r => setTimeout(r, 300));
-
-      // ② パッチを解除
-      _savedTrackStops.forEach(({ t, orig }) => { t.stop = orig; });
+      await new Promise(r => setTimeout(r, 100));
 
       if (_ckEnabled) stopCKLoop();
       setupGUMOverride();
@@ -2495,8 +2476,16 @@
       document.removeEventListener('click', handleArTap);
       removePinchZoom();
       stopCKLoop();
+      const avEl = document.getElementById('ar-video-el');
+      const planeEl = document.getElementById('ar-ck-plane');
+      if (avEl) avEl.setAttribute('visible', 'false');
+      if (planeEl) planeEl.setAttribute('visible', 'false');
+
       if (_cameraStream) {
-        _cameraStream.getTracks().forEach(t => t.stop());
+        _cameraStream.getTracks().forEach(t => {
+          if (t._origStop) t.stop = t._origStop;
+          t.stop();
+        });
         _cameraStream = null;
       }
       _cameraTrack = null;
