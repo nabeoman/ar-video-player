@@ -249,6 +249,10 @@
 </head>
 <body>
 
+  <!-- HTML 直下の動画アセット（A-Frameの監視外に置いてブロッキングを防ぐ） -->
+  <video id="ar-video" src="./viewer-video.mp4" loop muted playsinline preload="auto"
+    crossorigin="anonymous" webkit-playsinline="true" style="display:none"></video>
+
   <!-- AR レンダリングコンテナ -->
   <div id="ar-viewport" style="visibility: hidden;">
     <a-scene id="main-scene"
@@ -256,10 +260,6 @@
       renderer="colorManagement: true; physicallyCorrectLights: false; antialias: false; alpha: true"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
-      <a-assets timeout="30000">
-        <video id="ar-video" src="./viewer-video.mp4" loop muted playsinline preload="auto"
-          crossorigin="anonymous" webkit-playsinline="true" style="display:none"></video>
-      </a-assets>
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
       <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
     </a-scene>
@@ -360,7 +360,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.7.2</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.7.3</p>
   </div>
 
   <script>
