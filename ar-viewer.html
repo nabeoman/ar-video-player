@@ -250,7 +250,20 @@
 <body>
 
   <!-- AR レンダリングコンテナ -->
-  <div id="ar-viewport"></div>
+  <div id="ar-viewport" style="visibility: hidden;">
+    <a-scene id="main-scene"
+      mindar-image="imageTargetSrc: ./mindar-target.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no;"
+      renderer="colorManagement: true; physicallyCorrectLights: false; antialias: false; alpha: true"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false">
+      <a-assets timeout="30000">
+        <video id="ar-video" src="./viewer-video.mp4" loop muted playsinline preload="auto"
+          crossorigin="anonymous" webkit-playsinline="true" style="display:none"></video>
+      </a-assets>
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+      <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
+    </a-scene>
+  </div>
 
   <!-- AR ステータスバー -->
   <div id="ar-status-bar">
@@ -526,12 +539,47 @@
         }
         window._mindARBuffer = _compiledBuffer;
 
-        // シーン構築
         btn.textContent = 'AR を初期化中...';
-        const scene = await buildScene(VIEWER_VIDEO_SRC);
+        const scene = document.getElementById('main-scene');
+
+        // パラメータを適用してMindARを設定
+        const mindarAttr = `imageTargetSrc: ./mindar-target.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: ${window._RF_MINCF}; filterBeta: ${window._RF_BETA}; missTolerance: ${window._RF_MISS}; warmupTolerance: ${window._RF_WARMUP}`;
+        scene.setAttribute('mindar-image', mindarAttr);
+
+        // ターゲット内の中身を構築
+        const target = document.getElementById('ar-target');
+        target.innerHTML = '';
+        if (window._CK_ENABLED) {
+          const plane = document.createElement('a-plane');
+          plane.id = 'ar-ck-plane';
+          plane.setAttribute('width', '1');
+          plane.setAttribute('height', '0.5625');
+          plane.setAttribute('position', '0 -0.06 0.001');
+          plane.setAttribute('material', 'transparent:true;alphaTest:0.01;depthWrite:false');
+          target.appendChild(plane);
+        } else {
+          const av = document.createElement('a-video');
+          av.setAttribute('src', '#ar-video');
+          av.setAttribute('width', '1');
+          av.setAttribute('height', '0.5625');
+          av.setAttribute('position', '0 -0.06 0.001');
+          target.appendChild(av);
+        }
+
+        const vid = document.getElementById('ar-video');
+        if (vid) {
+          vid.style.display = window._CK_ENABLED ? 'none' : '';
+        }
+
+        // MindAR システムを開始
+        const sys = scene.systems && scene.systems['mindar-image-system'];
+        if (sys) {
+          await sys.start();
+        } else {
+          throw new Error('MindAR システムの初期化に失敗しました');
+        }
 
         // 動画ロード待ち
-        const vid = scene.querySelector('#ar-video');
         if (vid && vid.readyState < 3) {
           btn.textContent = '動画を読み込み中...';
           await new Promise((resolve, reject) => {
@@ -571,6 +619,9 @@
         document.body.classList.add('ar-active');
         document.documentElement.classList.add('ar-active');
 
+        // ビューポートを表示
+        document.getElementById('ar-viewport').style.visibility = 'visible';
+
         // HUD表示
         document.getElementById('screen-landing').style.display = 'none';
         document.getElementById('ar-status-bar').style.display = 'flex';
@@ -591,12 +642,11 @@
 
       } catch(e) {
         console.error(e);
-        const failedScene = document.querySelector('a-scene');
-        if (failedScene) failedScene.remove();
         document.getElementById('screen-landing').style.display = 'flex';
         document.getElementById('ar-status-bar').style.display = 'none';
         document.getElementById('ar-hud').style.display = 'none';
         document.getElementById('ar-tip').style.display = 'none';
+        document.getElementById('ar-viewport').style.visibility = 'hidden';
         alert('AR の起動に失敗しました。\n' + e.message);
       } finally {
         btn.disabled = false;
@@ -607,15 +657,18 @@
     function stopAR() {
       // 背景透過を解除
       document.body.classList.remove('ar-active');
-      document.documentElement.classList.remove('ar-active');
+      document.documentElement.remove('ar-active');
 
       stopCKLoop();
       const scene = document.getElementById('main-scene');
       if (scene) {
         const sys = scene.systems && scene.systems['mindar-image-system'];
         if (sys) try { sys.stop(); } catch(e) {}
-        scene.remove();
       }
+      
+      const target = document.getElementById('ar-target');
+      if (target) target.innerHTML = '';
+
       const vid = document.getElementById('ar-video');
       if (vid) vid.pause();
       if (_cameraStream) { _cameraStream.getTracks().forEach(t => t.stop()); _cameraStream = null; }
@@ -623,6 +676,7 @@
       removePinchZoom();
       _markerVisible = false;
       _userPaused = false;
+      document.getElementById('ar-viewport').style.visibility = 'hidden';
       document.getElementById('ar-status-bar').style.display = 'none';
       document.getElementById('ar-hud').style.display = 'none';
       document.getElementById('ar-tip').style.display = 'none';
@@ -638,44 +692,6 @@
         if (!handed) { handed = true; navigator.mediaDevices.getUserMedia = _orig; return Promise.resolve(stream); }
         return _orig(c);
       };
-    }
-
-    function buildScene(videoSrc) {
-      return new Promise(resolve => {
-        const old = document.querySelector('a-scene');
-        if (old) old.remove();
-        setupGUMOverride();
-
-        const scene = document.createElement('a-scene');
-        scene.id = 'main-scene';
-        const mindarAttr = `imageTargetSrc: ./mindar-target.mind; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: ${window._RF_MINCF}; filterBeta: ${window._RF_BETA}; missTolerance: ${window._RF_MISS}; warmupTolerance: ${window._RF_WARMUP}`;
-        scene.setAttribute('mindar-image', mindarAttr);
-        scene.setAttribute('renderer', 'colorManagement: true; physicallyCorrectLights: false; antialias: false; alpha: true');
-        scene.setAttribute('vr-mode-ui', 'enabled: false');
-        scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
-
-        const videoStyle = window._CK_ENABLED ? 'style="display:none"' : '';
-        const planeEl = window._CK_ENABLED
-          ? `<a-plane id="ar-ck-plane" width="1" height="0.5625" position="0 -0.06 0.001" material="transparent:true;alphaTest:0.01;depthWrite:false"></a-plane>`
-          : `<a-video src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001"></a-video>`;
-
-        scene.innerHTML = `
-          <a-assets timeout="30000">
-            <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline preload="auto"
-              crossorigin="anonymous" webkit-playsinline="true" ${videoStyle}></video>
-          </a-assets>
-          <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-          <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
-            ${planeEl}
-          </a-entity>
-        `;
-        document.getElementById('ar-viewport').appendChild(scene);
-
-        let done = false;
-        const finish = () => { if (!done) { done = true; resolve(scene); } };
-        scene.addEventListener('loaded', finish, { once: true });
-        setTimeout(finish, 4000);
-      });
     }
 
     function attachEvents() {
@@ -794,19 +810,48 @@
 
       if (window._CK_ENABLED) stopCKLoop();
       setupGUMOverride();
-      const newScene = await buildScene(VIEWER_VIDEO_SRC);
+
+      // パラメータを再設定してMindARを再スタート
+      const scene = document.getElementById('main-scene');
+      const mindarAttr = `imageTargetSrc: ./mindar-target.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: ${window._RF_MINCF}; filterBeta: ${window._RF_BETA}; missTolerance: ${window._RF_MISS}; warmupTolerance: ${window._RF_WARMUP}`;
+      scene.setAttribute('mindar-image', mindarAttr);
+
+      // ターゲットの中身を再構築
+      const target = document.getElementById('ar-target');
+      target.innerHTML = '';
+      if (window._CK_ENABLED) {
+        const plane = document.createElement('a-plane');
+        plane.id = 'ar-ck-plane';
+        plane.setAttribute('width', '1');
+        plane.setAttribute('height', '0.5625');
+        plane.setAttribute('position', '0 -0.06 0.001');
+        plane.setAttribute('material', 'transparent:true;alphaTest:0.01;depthWrite:false');
+        target.appendChild(plane);
+      } else {
+        const av = document.createElement('a-video');
+        av.setAttribute('src', '#ar-video');
+        av.setAttribute('width', '1');
+        av.setAttribute('height', '0.5625');
+        av.setAttribute('position', '0 -0.06 0.001');
+        target.appendChild(av);
+      }
+
+      const sys = scene.systems && scene.systems['mindar-image-system'];
+      if (sys) {
+        await sys.start();
+      }
       applyCSSZoom(_currentZoom);
 
       if (window._CK_ENABLED && vid) {
         stopCKLoop();
-        initAndStartCK(vid, newScene);
+        initAndStartCK(vid, scene);
       }
 
       // アスペクト比・位置調整の適用
       (function applyRatio(n) {
-        if (!newScene.isConnected) return;
-        const v2 = newScene.querySelector('#ar-video');
-        const av = newScene.querySelector(window._CK_ENABLED ? '#ar-ck-plane' : 'a-video');
+        if (!scene.isConnected) return;
+        const v2 = scene.querySelector('#ar-video');
+        const av = scene.querySelector(window._CK_ENABLED ? '#ar-ck-plane' : 'a-video');
         if (v2 && av && v2.videoWidth > 0) {
           let h = window._ADJ_H;
           let y = window._ADJ_Y;

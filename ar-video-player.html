@@ -880,7 +880,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v2.6.3 &nbsp;·&nbsp; 2026-07-14</span>
+      <span class="version-badge">v2.7.0 &nbsp;·&nbsp; 2026-07-14</span>
     </div>
 
     <div class="steps-container">
@@ -963,7 +963,7 @@
         </div>
 
         <div class="tab-body" id="panel-url">
-          <input class="input-text" type="url" id="url-input" placeholder="https://example.com/video.mp4  または YouTube URL" oninput="_updateCKAvailability()">
+          <input class="input-text" type="url" id="url-input" placeholder="https://example.com/video.mp4  または YouTube URL" onchange="_updateCKAvailability(); tryPreloadUrl()" oninput="_updateCKAvailability(); tryPreloadUrl()">
           <p class="hint-text">YouTube URL（通常・ショート・限定公開）または CORS 対応の直接 MP4 URL を入力できます</p>
           <p class="hint-text" style="margin-top:0.3rem;color:#5c6ef5">YouTube は画面オーバーレイで再生されます（3D追従なし）</p>
         </div>
@@ -1074,7 +1074,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.6.3</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.7.0</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -1337,9 +1337,9 @@
         });
       }
 
-      const oldScene = document.getElementById('main-scene');
-      if (oldScene) {
-        const system = oldScene.systems && oldScene.systems['mindar-image-system'];
+      const scene = document.getElementById('main-scene');
+      if (scene) {
+        const system = scene.systems && scene.systems['mindar-image-system'];
         if (system) { try { system.stop(); } catch(e) {} }
       }
       const vid = document.getElementById('ar-video');
@@ -1359,22 +1359,50 @@
 
       if (_ckEnabled) stopCKLoop();
       setupGUMOverride();
-      const newScene = await rebuildScene(_currentVideoSrc);
-      _dbgScene = newScene;
+
+      // パラメータを再設定してMindARを再スタート
+      scene.setAttribute('mindar-image', buildMindarAttr());
+
+      // ターゲット内の中身を再構築
+      const target = document.getElementById('ar-target');
+      target.innerHTML = '';
+      if (_ytVideoId) {
+        // YouTube モード
+      } else if (_ckEnabled) {
+        const plane = document.createElement('a-plane');
+        plane.id = 'ar-ck-plane';
+        plane.setAttribute('width', '1');
+        plane.setAttribute('height', '0.5625');
+        plane.setAttribute('position', '0 -0.06 0.001');
+        plane.setAttribute('material', 'transparent: true; alphaTest: 0.01; depthWrite: false; side: double');
+        target.appendChild(plane);
+      } else {
+        const av = document.createElement('a-video');
+        av.setAttribute('src', '#ar-video');
+        av.setAttribute('width', '1');
+        av.setAttribute('height', '0.5625');
+        av.setAttribute('position', '0 -0.06 0.001');
+        target.appendChild(av);
+      }
+
+      const sys = scene.systems && scene.systems['mindar-image-system'];
+      if (sys) {
+        await sys.start();
+      }
+
       applyCSSZoom(_currentZoom);
 
-      if (_ckEnabled && !_ytVideoId) {
+      if (_ckEnabled && !_ytVideoId && vid) {
         stopCKLoop();
-        const ckVid = newScene.querySelector('#ar-video');
-        if (ckVid) initAndStartCK(ckVid, newScene);
+        initAndStartCK(vid, scene);
       }
 
       if (!_ytVideoId) {
         const dbgInfo = document.getElementById('debug-info');
         (function applyRatio(n) {
-          if (!newScene.isConnected) return;
-          const v2   = newScene.querySelector('#ar-video');
-          const aVid = newScene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
+          if (!scene.isConnected) return;
+          const v2   = scene.querySelector('#ar-video');
+          const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
           if (v2 && aVid && v2.videoWidth > 0) {
             const pixelRatio = v2.videoHeight / v2.videoWidth;
             const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
@@ -1480,6 +1508,12 @@
         document.getElementById('panel-' + id).classList.toggle('active', id === tab));
       // URLタブ選択時はYouTube入力中の可能性があるため、CKチェックをリアルタイムで評価
       _updateCKAvailability();
+
+      // 切り替え時に現在選択されているソースをプレロード
+      try {
+        const src = resolveVideoSrc();
+        if (src) preloadVideoAsset(src);
+      } catch(e) {}
     }
 
     function _updateCKAvailability() {
@@ -1495,6 +1529,23 @@
     }
 
     /* ══════════════════════════════════════
+       Video Preload Helpers
+    ══════════════════════════════════════ */
+    function preloadVideoAsset(src) {
+      if (!src || extractYouTubeID(src)) return;
+      const vid = document.getElementById('ar-video');
+      if (vid && vid.src !== src) {
+        vid.src = src;
+        vid.load();
+      }
+    }
+
+    function tryPreloadUrl() {
+      const url = document.getElementById('url-input').value.trim();
+      if (url) preloadVideoAsset(url);
+    }
+
+    /* ══════════════════════════════════════
        Video file input
     ══════════════════════════════════════ */
     function handleVideoFile(e) {
@@ -1504,6 +1555,7 @@
       videoObjectURL = URL.createObjectURL(file);
       document.getElementById('file-chosen-name').textContent = file.name;
       document.getElementById('file-chosen-info').classList.add('show');
+      preloadVideoAsset(videoObjectURL);
     }
 
     const dropZone = document.getElementById('drop-zone');
@@ -1518,6 +1570,7 @@
         videoObjectURL = URL.createObjectURL(file);
         document.getElementById('file-chosen-name').textContent = file.name;
         document.getElementById('file-chosen-info').classList.add('show');
+        preloadVideoAsset(videoObjectURL);
       }
     });
 
@@ -1621,81 +1674,6 @@
     /* ══════════════════════════════════════
        Scene rebuild
     ══════════════════════════════════════ */
-    function rebuildScene(videoSrc) {
-      return new Promise(resolve => {
-        // ① カメラトラックの stop() を一時的に無効化
-        //    旧シーン削除時に MindAR cleanup がトラックを止めてしまうと
-        //    GUM Override で返すストリームが無効になり、MindAR が
-        //    リアル getUserMedia を呼んで ar-viewport 外にビデオ要素を置く問題を防ぐ
-        const tracksPatched = [];
-        if (_cameraStream) {
-          _cameraStream.getTracks().forEach(t => {
-            const orig = t.stop.bind(t);
-            tracksPatched.push({ t, orig });
-            t.stop = function() {};
-          });
-        }
-
-        // ② 旧シーンを削除（MindAR cleanup が走るが track.stop は no-op）
-        const old = document.querySelector('a-scene');
-        if (old) old.remove();
-
-        // ③ GUM Override を再設定（有効なストリームを MindAR に渡す）
-        setupGUMOverride();
-
-        const scene = document.createElement('a-scene');
-        scene.setAttribute('mindar-image', buildMindarAttr());
-        scene.setAttribute('renderer', 'colorManagement: true; physicallyCorrectLights: false; antialias: false; alpha: true');
-        scene.setAttribute('vr-mode-ui', 'enabled: false');
-        scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
-        scene.id = 'main-scene';
-
-        if (_ytVideoId) {
-          scene.innerHTML = `
-            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-            <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
-          `;
-        } else if (_ckEnabled) {
-          scene.innerHTML = `
-            <a-assets timeout="30000">
-              <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline preload="auto"
-                crossorigin="anonymous" webkit-playsinline="true" style="display:none"></video>
-            </a-assets>
-            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-            <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
-              <a-plane id="ar-ck-plane" width="1" height="0.5625" position="0 -0.06 0.001"
-                material="transparent: true; alphaTest: 0.01; depthWrite: false; side: double"></a-plane>
-            </a-entity>
-          `;
-        } else {
-          scene.innerHTML = `
-            <a-assets timeout="30000">
-              <video id="ar-video" src="${videoSrc}" autoplay loop muted playsinline preload="auto"
-                crossorigin="anonymous" webkit-playsinline="true"></video>
-            </a-assets>
-            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-            <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
-              <a-video src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001"></a-video>
-            </a-entity>
-          `;
-        }
-
-        document.getElementById('ar-viewport').appendChild(scene);
-
-        let done = false;
-        const finish = () => {
-          if (!done) {
-            done = true;
-            // ④ シーンロード後に track.stop() を復元
-            tracksPatched.forEach(({ t, orig }) => { t.stop = orig; });
-            resolve(scene);
-          }
-        };
-        scene.addEventListener('loaded', finish, { once: true });
-        setTimeout(finish, 4000);
-      });
-    }
-
     /* ══════════════════════════════════════
        Target events
     ══════════════════════════════════════ */
@@ -1789,7 +1767,7 @@
         }
 
         // カメラトラック取得・ハードウェアズーム対応確認
-        _cameraStream = cameraStream; // グローバルに保持（rebuildScene再呼び出し時に再利用）
+        _cameraStream = cameraStream;
         _cameraTrack = cameraStream.getVideoTracks()[0];
         _hwZoomSupported = false;
         _hwZoomMin = 1.0; _hwZoomMax = 4.0;
@@ -1840,57 +1818,95 @@
           compiledMindKey = sourceKey;
         }
 
-        // fetch interceptor が ./mindar-target.mind を要求されたとき返すバッファをセット
+        // fetch interceptor 用のバッファをセット
         window._mindARBuffer = compiledMindBuffer;
 
-        // ── Step C: シーン構築 ──
+        // ── Step C: ARエンジンの初期化（静的a-sceneの設定） ──
         btn.textContent = 'AR を初期化中...';
-        const scene = await rebuildScene(videoSrc);
+        const scene = document.getElementById('main-scene');
 
-        // ── Step C-2: 動画バッファ確認（ネットワークエラー・タイムアウト検出）──
-        if (!_ytVideoId) {
-          const vid = scene.querySelector('#ar-video');
-          if (vid && vid.readyState < 3) {
-            btn.textContent = '動画を読み込み中...';
-            await new Promise((resolve, reject) => {
-              const onCanPlay = () => { cleanup(); resolve(); };
-              const onError   = () => {
-                cleanup();
-                const code = vid.error ? vid.error.code : '?';
-                reject(new Error(
-                  code === 4
-                    ? '動画にアクセスできません。\nURLが正しいか、サーバーのCORS設定を確認してください。'
-                    : '動画の読み込みに失敗しました（エラーコード: ' + code + '）'
-                ));
-              };
-              const timer = setTimeout(() => {
-                cleanup();
-                reject(new Error('動画の読み込みがタイムアウトしました（15秒）。\nURLや接続環境を確認してください。'));
-              }, 15000);
-              function cleanup() {
-                vid.removeEventListener('canplay', onCanPlay);
-                vid.removeEventListener('error', onError);
-                clearTimeout(timer);
-              }
-              vid.addEventListener('canplay', onCanPlay);
-              vid.addEventListener('error', onError);
-            });
-          }
-        }
+        // パラメータを適用してMindARを設定
+        scene.setAttribute('mindar-image', buildMindarAttr());
 
-        // YouTube モードは 3D video 不要のため比率適用をスキップ
+        // ターゲット内の中身を構築
+        const target = document.getElementById('ar-target');
+        target.innerHTML = '';
+
+        const vid = document.getElementById('ar-video');
+
         if (_ytVideoId) {
           document.getElementById('debug-panel').style.display = 'none';
           document.getElementById('btn-debug-toggle').style.display = 'none';
+        } else {
+          // MP4 モード
+          if (_ckEnabled) {
+            const plane = document.createElement('a-plane');
+            plane.id = 'ar-ck-plane';
+            plane.setAttribute('width', '1');
+            plane.setAttribute('height', '0.5625');
+            plane.setAttribute('position', '0 -0.06 0.001');
+            plane.setAttribute('material', 'transparent: true; alphaTest: 0.01; depthWrite: false; side: double');
+            target.appendChild(plane);
+          } else {
+            const av = document.createElement('a-video');
+            av.setAttribute('src', '#ar-video');
+            av.setAttribute('width', '1');
+            av.setAttribute('height', '0.5625');
+            av.setAttribute('position', '0 -0.06 0.001');
+            target.appendChild(av);
+          }
+
+          if (vid) {
+            vid.style.display = _ckEnabled ? 'none' : '';
+            if (vid.src !== videoSrc) {
+              vid.src = videoSrc;
+              vid.load();
+            }
+          }
+        }
+
+        // MindAR システムを開始
+        const sys = scene.systems && scene.systems['mindar-image-system'];
+        if (sys) {
+          await sys.start();
+        } else {
+          throw new Error('MindAR システムの初期化に失敗しました');
+        }
+
+        // ── Step C-2: 動画バッファ確認 ──
+        if (!_ytVideoId && vid && vid.readyState < 3) {
+          btn.textContent = '動画を読み込み中...';
+          await new Promise((resolve, reject) => {
+            const onCanPlay = () => { cleanup(); resolve(); };
+            const onError   = () => {
+              cleanup();
+              const code = vid.error ? vid.error.code : '?';
+              reject(new Error(
+                code === 4
+                  ? '動画にアクセスできません。\nURLが正しいか、サーバーのCORS設定を確認してください。'
+                  : '動画の読み込みに失敗しました（エラーコード: ' + code + '）'
+              ));
+            };
+            const timer = setTimeout(() => {
+              cleanup();
+              reject(new Error('動画の読み込みがタイムアウトしました（15秒）。\nURLや接続環境を確認してください。'));
+            }, 15000);
+            function cleanup() {
+              vid.removeEventListener('canplay', onCanPlay);
+              vid.removeEventListener('error', onError);
+              clearTimeout(timer);
+            }
+            vid.addEventListener('canplay', onCanPlay);
+            vid.addEventListener('error', onError);
+          });
         }
 
         // CK モード初期化
-        if (_ckEnabled && !_ytVideoId) {
-          const ckVid = scene.querySelector('#ar-video');
-          if (ckVid) initAndStartCK(ckVid, scene);
+        if (_ckEnabled && !_ytVideoId && vid) {
+          initAndStartCK(vid, scene);
         }
 
-        // YouTube モード以外: videoWidth が取得できるまでポーリングしてアスペクト比を適用
+        // YouTube モード以外: アスペクト比を適用
         if (!_ytVideoId) {
           const dbg = document.getElementById('debug-panel');
           const dbgInfo = document.getElementById('debug-info');
@@ -1901,10 +1917,10 @@
           document.getElementById('dc-op-val').textContent = '100%';
           (function applyRatio(n) {
             if (!scene.isConnected) { dbg.style.display = 'none'; return; }
-            const vid  = scene.querySelector('#ar-video');
+            const v2  = scene.querySelector('#ar-video');
             const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
-            if (vid && aVid && vid.videoWidth > 0) {
-              const pixelRatio = vid.videoHeight / vid.videoWidth;
+            if (v2 && aVid && v2.videoWidth > 0) {
+              const pixelRatio = v2.videoHeight / v2.videoWidth;
               const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
               const saved = loadSavedAdjust();
               _dbgH = saved ? saved.h : corrected;
@@ -1916,14 +1932,14 @@
               dbgInfo.dataset.baseH = corrected.toFixed(4);
               dbgInfo.textContent =
                 `[OK try ${n+1}]${saved ? ' (保存済)' : ''}${_ckEnabled ? ' [CK]' : ''}\n` +
-                `video  : ${vid.videoWidth} × ${vid.videoHeight}px\n` +
+                `video  : ${v2.videoWidth} × ${v2.videoHeight}px\n` +
                 `pixel ratio : ${pixelRatio.toFixed(4)}\n` +
                 `補正後 ratio : ${corrected.toFixed(4)}\n` +
                 `適用 h=${_dbgH.toFixed(4)}  y=${_dbgY.toFixed(4)}`;
             } else if (n < 19) {
               dbgInfo.textContent =
                 `[try ${n+1}/20] 取得中...\n` +
-                `video  : ${vid ? vid.videoWidth : '?'} × ${vid ? vid.videoHeight : '?'}px`;
+                `video  : ${v2 ? v2.videoWidth : '?'} × ${v2 ? v2.videoHeight : '?'}px`;
               setTimeout(() => applyRatio(n + 1), 250);
             } else {
               dbgInfo.textContent = `[WARN] videoWidth 取得失敗\nheight 未変更 (0.5625)`;
@@ -1935,10 +1951,10 @@
         document.body.classList.add('ar-active');
         document.documentElement.classList.add('ar-active');
 
+        // ビューポートを表示
+        document.getElementById('ar-viewport').style.visibility = 'visible';
+
         // ── Step D: HUD 表示 ──
-        // autoStart: true（デフォルト）により MindAR はシーン挿入時に自動起動する。
-        // getUserMedia は既に取得済みストリームを返すオーバーライドが有効なので iOS でも動作する。
-        // system.start() は呼ばない（MindAR 内部ライフサイクルに任せる）。
         const dot = document.getElementById('pulsedot');
         dot.className = 'pulsedot searching';
         document.getElementById('status-label').textContent = '画像を探しています...';
@@ -2005,7 +2021,6 @@
       document.getElementById('ar-tip').classList.remove('hidden');
 
       // ① sys.stop() より先にカメラトラックを保護
-      //    MindAR の stop() が track.stop() を呼ぶとストリームが恒久的に破壊されるため
       const _savedTrackStops = [];
       if (_cameraStream) {
         _cameraStream.getTracks().forEach(t => {
@@ -2015,37 +2030,64 @@
         });
       }
 
-      // 旧システムを停止（track.stop はno-op済みなので安全）
-      const oldScene = document.getElementById('main-scene');
-      if (oldScene) {
-        const sys = oldScene.systems && oldScene.systems['mindar-image-system'];
+      // 旧システムを停止
+      const scene = document.getElementById('main-scene');
+      if (scene) {
+        const sys = scene.systems && scene.systems['mindar-image-system'];
         if (sys) { try { sys.stop(); } catch(e) {} }
       }
 
       await new Promise(r => setTimeout(r, 300));
 
-      // ② パッチを解除してから rebuildScene へ（rebuildScene が正しく再パッチ・復元する）
+      // ② パッチを解除
       _savedTrackStops.forEach(({ t, orig }) => { t.stop = orig; });
 
-      // シーンを再構築（コンパイル済みバッファ使用のため高速）
       if (_ckEnabled) stopCKLoop();
       setupGUMOverride();
-      const newScene = await rebuildScene(_currentVideoSrc);
-      _dbgScene = newScene;
+
+      // パラメータを再設定してMindARを再スタート
+      scene.setAttribute('mindar-image', buildMindarAttr());
+
+      // ターゲット内の中身を再構築
+      const target = document.getElementById('ar-target');
+      target.innerHTML = '';
+      if (_ytVideoId) {
+        // YouTube モードは中身なし
+      } else if (_ckEnabled) {
+        const plane = document.createElement('a-plane');
+        plane.id = 'ar-ck-plane';
+        plane.setAttribute('width', '1');
+        plane.setAttribute('height', '0.5625');
+        plane.setAttribute('position', '0 -0.06 0.001');
+        plane.setAttribute('material', 'transparent: true; alphaTest: 0.01; depthWrite: false; side: double');
+        target.appendChild(plane);
+      } else {
+        const av = document.createElement('a-video');
+        av.setAttribute('src', '#ar-video');
+        av.setAttribute('width', '1');
+        av.setAttribute('height', '0.5625');
+        av.setAttribute('position', '0 -0.06 0.001');
+        target.appendChild(av);
+      }
+
+      const sys = scene.systems && scene.systems['mindar-image-system'];
+      if (sys) {
+        await sys.start();
+      }
+
       applyCSSZoom(_currentZoom);
 
-      if (_ckEnabled && !_ytVideoId) {
+      if (_ckEnabled && !_ytVideoId && vid) {
         stopCKLoop();
-        const ckVid = newScene.querySelector('#ar-video');
-        if (ckVid) initAndStartCK(ckVid, newScene);
+        initAndStartCK(vid, scene);
       }
 
       if (!_ytVideoId) {
         const dbgInfo = document.getElementById('debug-info');
         (function applyRatio(n) {
-          if (!newScene.isConnected) return;
-          const v2   = newScene.querySelector('#ar-video');
-          const aVid = newScene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
+          if (!scene.isConnected) return;
+          const v2   = scene.querySelector('#ar-video');
+          const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
           if (v2 && aVid && v2.videoWidth > 0) {
             const pixelRatio = v2.videoHeight / v2.videoWidth;
             const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
@@ -2391,6 +2433,10 @@
         const system = scene.systems['mindar-image-system'];
         if (system) system.stop();
       }
+      
+      const target = document.getElementById('ar-target');
+      if (target) target.innerHTML = '';
+
       const vid = document.getElementById('ar-video');
       if (vid) { vid.pause(); }
 
@@ -2400,13 +2446,17 @@
       document.removeEventListener('click', handleArTap);
       removePinchZoom();
       stopCKLoop();
-      _cameraStream = null;
+      if (_cameraStream) {
+        _cameraStream.getTracks().forEach(t => t.stop());
+        _cameraStream = null;
+      }
       _cameraTrack = null;
       _hwZoomSupported = false;
       _dbgScene = null;
       _dbgOpacity = 1.0;
       _ytVideoId = null;
       _ytShorts  = false;
+      document.getElementById('ar-viewport').style.visibility = 'hidden';
       document.getElementById('yt-overlay').style.display = 'none';
       document.getElementById('yt-iframe').src = '';
       document.getElementById('btn-debug-toggle').style.display = '';
