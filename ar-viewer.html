@@ -261,7 +261,12 @@
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-      <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
+      <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+        <!-- 通常用 a-video (初期非表示) -->
+        <a-video id="ar-video-el" src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001" visible="false"></a-video>
+        <!-- クロマキー用 a-plane (初期非表示) -->
+        <a-plane id="ar-ck-plane" width="1" height="0.5625" position="0 -0.06 0.001" material="transparent: true; alphaTest: 0.01; depthWrite: false; side: double" visible="false"></a-plane>
+      </a-entity>
     </a-scene>
   </div>
 
@@ -360,7 +365,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.8.0</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.9.0</p>
   </div>
 
   <script>
@@ -547,24 +552,11 @@
         scene.setAttribute('mindar-image', mindarAttr);
 
         // ターゲット内の中身を構築
-        const target = document.getElementById('ar-target');
-        target.innerHTML = '';
-        if (window._CK_ENABLED) {
-          const plane = document.createElement('a-plane');
-          plane.id = 'ar-ck-plane';
-          plane.setAttribute('width', '1');
-          plane.setAttribute('height', '0.5625');
-          plane.setAttribute('position', '0 -0.06 0.001');
-          plane.setAttribute('material', 'transparent:true;alphaTest:0.01;depthWrite:false');
-          target.appendChild(plane);
-        } else {
-          const av = document.createElement('a-video');
-          av.setAttribute('src', '#ar-video');
-          av.setAttribute('width', '1');
-          av.setAttribute('height', '0.5625');
-          av.setAttribute('position', '0 -0.06 0.001');
-          target.appendChild(av);
-        }
+        const avEl = document.getElementById('ar-video-el');
+        const planeEl = document.getElementById('ar-ck-plane');
+
+        if (avEl) avEl.setAttribute('visible', !window._CK_ENABLED ? 'true' : 'false');
+        if (planeEl) planeEl.setAttribute('visible', window._CK_ENABLED ? 'true' : 'false');
 
         const vid = document.getElementById('ar-video');
         if (vid) {
@@ -606,7 +598,7 @@
         (function applyRatio(n) {
           if (!scene.isConnected) return;
           const v2 = document.getElementById('ar-video');
-          const av = scene.querySelector(window._CK_ENABLED ? '#ar-ck-plane' : 'a-video');
+          const av = document.getElementById(window._CK_ENABLED ? 'ar-ck-plane' : 'ar-video-el');
           if (v2 && av && v2.videoWidth > 0) {
             let h = window._ADJ_H;
             let y = window._ADJ_Y;
@@ -827,24 +819,10 @@
       scene.setAttribute('mindar-image', mindarAttr);
 
       // ターゲットの中身を再構築
-      const target = document.getElementById('ar-target');
-      target.innerHTML = '';
-      if (window._CK_ENABLED) {
-        const plane = document.createElement('a-plane');
-        plane.id = 'ar-ck-plane';
-        plane.setAttribute('width', '1');
-        plane.setAttribute('height', '0.5625');
-        plane.setAttribute('position', '0 -0.06 0.001');
-        plane.setAttribute('material', 'transparent:true;alphaTest:0.01;depthWrite:false');
-        target.appendChild(plane);
-      } else {
-        const av = document.createElement('a-video');
-        av.setAttribute('src', '#ar-video');
-        av.setAttribute('width', '1');
-        av.setAttribute('height', '0.5625');
-        av.setAttribute('position', '0 -0.06 0.001');
-        target.appendChild(av);
-      }
+      const avEl = document.getElementById('ar-video-el');
+      const planeEl = document.getElementById('ar-ck-plane');
+      if (avEl) avEl.setAttribute('visible', !window._CK_ENABLED ? 'true' : 'false');
+      if (planeEl) planeEl.setAttribute('visible', window._CK_ENABLED ? 'true' : 'false');
 
       const sys = scene.systems && scene.systems['mindar-image-system'];
       if (sys) {
@@ -877,7 +855,7 @@
       (function applyRatio(n) {
         if (!scene.isConnected) return;
         const v2 = document.getElementById('ar-video');
-        const av = scene.querySelector(window._CK_ENABLED ? '#ar-ck-plane' : 'a-video');
+        const av = document.getElementById(window._CK_ENABLED ? 'ar-ck-plane' : 'ar-video-el');
         if (v2 && av && v2.videoWidth > 0) {
           let h = window._ADJ_H;
           let y = window._ADJ_Y;

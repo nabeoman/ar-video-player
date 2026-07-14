@@ -686,7 +686,12 @@
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-      <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
+      <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+        <!-- 通常用 a-video (初期非表示) -->
+        <a-video id="ar-video-el" src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001" visible="false"></a-video>
+        <!-- クロマキー用 a-plane (初期非表示) -->
+        <a-plane id="ar-ck-plane" width="1" height="0.5625" position="0 -0.06 0.001" material="transparent: true; alphaTest: 0.01; depthWrite: false; side: double" visible="false"></a-plane>
+      </a-entity>
     </a-scene>
   </div>
 
@@ -893,7 +898,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v2.7.3 &nbsp;·&nbsp; 2026-07-14</span>
+      <span class="version-badge">v2.9.0 &nbsp;·&nbsp; 2026-07-14</span>
     </div>
 
     <div class="steps-container">
@@ -1087,7 +1092,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.7.3</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.9.0</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -1377,26 +1382,10 @@
       scene.setAttribute('mindar-image', buildMindarAttr());
 
       // ターゲット内の中身を再構築
-      const target = document.getElementById('ar-target');
-      target.innerHTML = '';
-      if (_ytVideoId) {
-        // YouTube モード
-      } else if (_ckEnabled) {
-        const plane = document.createElement('a-plane');
-        plane.id = 'ar-ck-plane';
-        plane.setAttribute('width', '1');
-        plane.setAttribute('height', '0.5625');
-        plane.setAttribute('position', '0 -0.06 0.001');
-        plane.setAttribute('material', 'transparent: true; alphaTest: 0.01; depthWrite: false; side: double');
-        target.appendChild(plane);
-      } else {
-        const av = document.createElement('a-video');
-        av.setAttribute('src', '#ar-video');
-        av.setAttribute('width', '1');
-        av.setAttribute('height', '0.5625');
-        av.setAttribute('position', '0 -0.06 0.001');
-        target.appendChild(av);
-      }
+      const avEl = document.getElementById('ar-video-el');
+      const planeEl = document.getElementById('ar-ck-plane');
+      if (avEl) avEl.setAttribute('visible', !_ckEnabled ? 'true' : 'false');
+      if (planeEl) planeEl.setAttribute('visible', _ckEnabled ? 'true' : 'false');
 
       const sys = scene.systems && scene.systems['mindar-image-system'];
       if (sys) {
@@ -1431,7 +1420,7 @@
         (function applyRatio(n) {
           if (!scene.isConnected) return;
           const v2   = document.getElementById('ar-video');
-          const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
+          const aVid = document.getElementById(_ckEnabled ? 'ar-ck-plane' : 'ar-video-el');
           if (v2 && aVid && v2.videoWidth > 0) {
             const pixelRatio = v2.videoHeight / v2.videoWidth;
             const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
@@ -1888,33 +1877,20 @@
         scene.setAttribute('mindar-image', buildMindarAttr());
 
         // ターゲット内の中身を構築
-        const target = document.getElementById('ar-target');
-        target.innerHTML = '';
-
-        const vid = document.getElementById('ar-video');
+        const avEl = document.getElementById('ar-video-el');
+        const planeEl = document.getElementById('ar-ck-plane');
 
         if (_ytVideoId) {
+          if (avEl) avEl.setAttribute('visible', 'false');
+          if (planeEl) planeEl.setAttribute('visible', 'false');
           document.getElementById('debug-panel').style.display = 'none';
           document.getElementById('btn-debug-toggle').style.display = 'none';
         } else {
           // MP4 モード
-          if (_ckEnabled) {
-            const plane = document.createElement('a-plane');
-            plane.id = 'ar-ck-plane';
-            plane.setAttribute('width', '1');
-            plane.setAttribute('height', '0.5625');
-            plane.setAttribute('position', '0 -0.06 0.001');
-            plane.setAttribute('material', 'transparent: true; alphaTest: 0.01; depthWrite: false; side: double');
-            target.appendChild(plane);
-          } else {
-            const av = document.createElement('a-video');
-            av.setAttribute('src', '#ar-video');
-            av.setAttribute('width', '1');
-            av.setAttribute('height', '0.5625');
-            av.setAttribute('position', '0 -0.06 0.001');
-            target.appendChild(av);
-          }
+          if (avEl) avEl.setAttribute('visible', !_ckEnabled ? 'true' : 'false');
+          if (planeEl) planeEl.setAttribute('visible', _ckEnabled ? 'true' : 'false');
 
+          const vid = document.getElementById('ar-video');
           if (vid) {
             vid.style.display = _ckEnabled ? 'none' : '';
             if (vid.src !== videoSrc) {
@@ -1951,6 +1927,7 @@
 
 
         // CK モード初期化
+        const vid = document.getElementById('ar-video');
         if (_ckEnabled && !_ytVideoId && vid) {
           initAndStartCK(vid, scene);
         }
@@ -1967,7 +1944,7 @@
           (function applyRatio(n) {
             if (!scene.isConnected) { dbg.style.display = 'none'; return; }
             const v2  = document.getElementById('ar-video');
-            const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
+            const aVid = document.getElementById(_ckEnabled ? 'ar-ck-plane' : 'ar-video-el');
             if (v2 && aVid && v2.videoWidth > 0) {
               const pixelRatio = v2.videoHeight / v2.videoWidth;
               const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
@@ -2109,26 +2086,10 @@
       scene.setAttribute('mindar-image', buildMindarAttr());
 
       // ターゲット内の中身を再構築
-      const target = document.getElementById('ar-target');
-      target.innerHTML = '';
-      if (_ytVideoId) {
-        // YouTube モードは中身なし
-      } else if (_ckEnabled) {
-        const plane = document.createElement('a-plane');
-        plane.id = 'ar-ck-plane';
-        plane.setAttribute('width', '1');
-        plane.setAttribute('height', '0.5625');
-        plane.setAttribute('position', '0 -0.06 0.001');
-        plane.setAttribute('material', 'transparent: true; alphaTest: 0.01; depthWrite: false; side: double');
-        target.appendChild(plane);
-      } else {
-        const av = document.createElement('a-video');
-        av.setAttribute('src', '#ar-video');
-        av.setAttribute('width', '1');
-        av.setAttribute('height', '0.5625');
-        av.setAttribute('position', '0 -0.06 0.001');
-        target.appendChild(av);
-      }
+      const avEl = document.getElementById('ar-video-el');
+      const planeEl = document.getElementById('ar-ck-plane');
+      if (avEl) avEl.setAttribute('visible', !_ckEnabled ? 'true' : 'false');
+      if (planeEl) planeEl.setAttribute('visible', _ckEnabled ? 'true' : 'false');
 
       const sys = scene.systems && scene.systems['mindar-image-system'];
       if (sys) {
@@ -2163,7 +2124,7 @@
         (function applyRatio(n) {
           if (!scene.isConnected) return;
           const v2   = document.getElementById('ar-video');
-          const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
+          const aVid = document.getElementById(_ckEnabled ? 'ar-ck-plane' : 'ar-video-el');
           if (v2 && aVid && v2.videoWidth > 0) {
             const pixelRatio = v2.videoHeight / v2.videoWidth;
             const corrected  = pixelRatio * MINDAR_HEIGHT_CORRECTION;
