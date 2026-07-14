@@ -880,7 +880,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v2.7.0 &nbsp;·&nbsp; 2026-07-14</span>
+      <span class="version-badge">v2.7.1 &nbsp;·&nbsp; 2026-07-14</span>
     </div>
 
     <div class="steps-container">
@@ -1074,7 +1074,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.7.0</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.7.1</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -1387,6 +1387,22 @@
 
       const sys = scene.systems && scene.systems['mindar-image-system'];
       if (sys) {
+        // autoStart: falseによるthis.ui未定義バグの対策ハック
+        if (!sys.ui) {
+          sys.ui = {
+            showLoading: () => {},
+            hideLoading: () => {},
+            showScanning: () => {},
+            hideScanning: () => {},
+            showError: () => {},
+            hideError: () => {}
+          };
+        } else {
+          if (!sys.ui.showLoading) sys.ui.showLoading = () => {};
+          if (!sys.ui.hideLoading) sys.ui.hideLoading = () => {};
+          if (!sys.ui.showScanning) sys.ui.showScanning = () => {};
+          if (!sys.ui.hideScanning) sys.ui.hideScanning = () => {};
+        }
         await sys.start();
       }
 
@@ -1868,6 +1884,22 @@
         // MindAR システムを開始
         const sys = scene.systems && scene.systems['mindar-image-system'];
         if (sys) {
+          // autoStart: falseによるthis.ui未定義バグの対策ハック
+          if (!sys.ui) {
+            sys.ui = {
+              showLoading: () => {},
+              hideLoading: () => {},
+              showScanning: () => {},
+              hideScanning: () => {},
+              showError: () => {},
+              hideError: () => {}
+            };
+          } else {
+            if (!sys.ui.showLoading) sys.ui.showLoading = () => {};
+            if (!sys.ui.hideLoading) sys.ui.hideLoading = () => {};
+            if (!sys.ui.showScanning) sys.ui.showScanning = () => {};
+            if (!sys.ui.hideScanning) sys.ui.hideScanning = () => {};
+          }
           await sys.start();
         } else {
           throw new Error('MindAR システムの初期化に失敗しました');
@@ -2072,6 +2104,22 @@
 
       const sys = scene.systems && scene.systems['mindar-image-system'];
       if (sys) {
+        // autoStart: falseによるthis.ui未定義バグの対策ハック
+        if (!sys.ui) {
+          sys.ui = {
+            showLoading: () => {},
+            hideLoading: () => {},
+            showScanning: () => {},
+            hideScanning: () => {},
+            showError: () => {},
+            hideError: () => {}
+          };
+        } else {
+          if (!sys.ui.showLoading) sys.ui.showLoading = () => {};
+          if (!sys.ui.hideLoading) sys.ui.hideLoading = () => {};
+          if (!sys.ui.showScanning) sys.ui.showScanning = () => {};
+          if (!sys.ui.hideScanning) sys.ui.hideScanning = () => {};
+        }
         await sys.start();
       }
 

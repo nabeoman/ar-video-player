@@ -360,7 +360,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.7.0</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.7.1</p>
   </div>
 
   <script>
@@ -574,6 +574,22 @@
         // MindAR システムを開始
         const sys = scene.systems && scene.systems['mindar-image-system'];
         if (sys) {
+          // autoStart: falseによるthis.ui未定義バグの対策ハック
+          if (!sys.ui) {
+            sys.ui = {
+              showLoading: () => {},
+              hideLoading: () => {},
+              showScanning: () => {},
+              hideScanning: () => {},
+              showError: () => {},
+              hideError: () => {}
+            };
+          } else {
+            if (!sys.ui.showLoading) sys.ui.showLoading = () => {};
+            if (!sys.ui.hideLoading) sys.ui.hideLoading = () => {};
+            if (!sys.ui.showScanning) sys.ui.showScanning = () => {};
+            if (!sys.ui.hideScanning) sys.ui.hideScanning = () => {};
+          }
           await sys.start();
         } else {
           throw new Error('MindAR システムの初期化に失敗しました');
@@ -838,6 +854,22 @@
 
       const sys = scene.systems && scene.systems['mindar-image-system'];
       if (sys) {
+        // autoStart: falseによるthis.ui未定義バグの対策ハック
+        if (!sys.ui) {
+          sys.ui = {
+            showLoading: () => {},
+            hideLoading: () => {},
+            showScanning: () => {},
+            hideScanning: () => {},
+            showError: () => {},
+            hideError: () => {}
+          };
+        } else {
+          if (!sys.ui.showLoading) sys.ui.showLoading = () => {};
+          if (!sys.ui.hideLoading) sys.ui.hideLoading = () => {};
+          if (!sys.ui.showScanning) sys.ui.showScanning = () => {};
+          if (!sys.ui.hideScanning) sys.ui.hideScanning = () => {};
+        }
         await sys.start();
       }
       applyCSSZoom(_currentZoom);
