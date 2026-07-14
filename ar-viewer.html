@@ -800,11 +800,13 @@
       document.getElementById('ar-tip').classList.remove('hidden');
 
       const _savedTrackStops = [];
-      _cameraStream.getTracks().forEach(t => {
-        const orig = t.stop.bind(t);
-        _savedTrackStops.push({ t, orig });
-        t.stop = function() {};
-      });
+      if (_cameraStream) {
+        _cameraStream.getTracks().forEach(t => {
+          const orig = t.stop.bind(t);
+          _savedTrackStops.push({ t, orig });
+          t.stop = function() {};
+        });
+      }
 
       const oldScene = document.getElementById('main-scene');
       if (oldScene) {
