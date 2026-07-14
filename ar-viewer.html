@@ -70,6 +70,9 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0d0f1a; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; }
+    body.ar-active, html.ar-active {
+      background: transparent !important;
+    }
 
     /* ── ランディング画面 ── */
     #screen-landing {
@@ -138,7 +141,7 @@
       background: rgba(0,0,0,0.45);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
-      align-items: center; justify-content: space-between;
+      align-items: center; justify-content: flex-start;
       gap: 0.5rem;
     }
     .status-badge {
@@ -166,11 +169,26 @@
       border-radius: 8px;
       cursor: pointer;
       white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
     }
     .btn-exit:active { opacity: 0.7; }
+    .btn-exit.active { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.4); }
+
+    #ar-hud {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      padding: 1rem 1.25rem;
+      display: none;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 200;
+      background: linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 100%);
+    }
 
     #ar-tip {
-      position: fixed; bottom: 2.5rem; left: 50%; transform: translateX(-50%);
+      position: fixed; bottom: 5.5rem; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.55);
       color: rgba(255,255,255,0.8);
       font-size: 0.85rem;
@@ -183,6 +201,50 @@
       transition: opacity 0.3s;
     }
     #ar-tip.hidden { opacity: 0; }
+
+    #zoom-badge {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 250;
+      padding: 0.35rem 0.8rem;
+      background: rgba(0,0,0,0.52);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px;
+      color: rgba(255,255,255,0.92);
+      font-size: 1.15rem;
+      font-weight: 600;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+      font-family: system-ui, sans-serif;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── フルスクリーンオーバーレイ ── */
+    #fs-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      background: #000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #fs-video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    #fs-ctrl {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 0.5rem;
+    }
   </style>
 </head>
 <body>
@@ -196,10 +258,71 @@
       <div class="pulsedot searching" id="pulsedot"></div>
       <span id="status-label">マーカーを探しています...</span>
     </div>
-    <button class="btn-exit" onclick="stopAR()">✕ 終了</button>
+  </div>
+
+  <!-- AR HUD -->
+  <div id="ar-hud">
+    <!-- ユーザー用ボタン（左） -->
+    <div style="display:flex;gap:0.5rem;align-items:center;">
+      <button class="btn-exit" id="btn-rescan" onclick="rescanMarker()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
+          <polyline points="1 4 1 10 7 10"></polyline>
+          <path d="M3.51 15a9 9 0 1 0 .49-4.95"></path>
+        </svg>
+        再確認
+      </button>
+      <button class="btn-exit" id="btn-fullscreen" onclick="enterFullscreenMode()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <polyline points="9 21 3 21 3 15"></polyline>
+          <line x1="21" y1="3" x2="14" y2="10"></line>
+          <line x1="3" y1="21" x2="10" y2="14"></line>
+        </svg>
+        全画面
+      </button>
+      <button class="btn-exit" id="btn-audio-toggle" onclick="toggleAudio()">
+        <svg id="icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+        <svg id="icon-sound-off" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;display:none">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <line x1="23" y1="9" x2="17" y2="15"></line>
+          <line x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+        <span id="lbl-audio-toggle">音声ON</span>
+      </button>
+    </div>
+    <!-- 終了ボタン（右） -->
+    <div>
+      <button class="btn-exit" onclick="stopAR()">✕ 終了</button>
+    </div>
   </div>
 
   <div id="ar-tip" style="display:none">印刷した画像にカメラを向けてください</div>
+  <div id="zoom-badge"></div>
+
+  <!-- フルスクリーンオーバーレイ -->
+  <div id="fs-overlay">
+    <video id="fs-video" playsinline webkit-playsinline></video>
+    <div id="fs-ctrl">
+      <button class="btn-exit" id="fs-btn-audio" onclick="toggleFsAudio()">
+        <svg id="fs-icon-sound-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+        <svg id="fs-icon-sound-off" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;display:none">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          <line x1="23" y1="9" x2="17" y2="15"></line>
+          <line x1="17" y1="9" x2="23" y2="15"></line>
+        </svg>
+        <span id="fs-lbl-audio">音声ON</span>
+      </button>
+      <button class="btn-exit" onclick="exitFullscreenMode()">✕ 閉じる</button>
+    </div>
+  </div>
 
   <!-- ランディング画面 -->
   <div id="screen-landing">
@@ -224,19 +347,24 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.6.1</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.6.2</p>
   </div>
 
   <script>
     const MINDAR_HEIGHT_CORRECTION = 1.071;
 
-    // URLパラメータからCK設定を読み取る
+    // URLパラメータからCK設定とトラッキング設定を読み取る
     (function() {
       const p = new URLSearchParams(location.search);
       window._CK_ENABLED  = p.get('ck') === '1';
       window._CK_COLOR    = p.get('ckColor') || 'green';
       window._CK_SIM      = parseFloat(p.get('ckSim'))  || 0.40;
       window._CK_SMT      = parseFloat(p.get('ckSmt'))  || 0.08;
+      // トラッキング感度パラメータ
+      window._RF_MINCF    = parseFloat(p.get('minCF'))  || 0.1;
+      window._RF_BETA     = parseInt(p.get('beta'))     || 1000;
+      window._RF_MISS     = parseInt(p.get('miss'))     || 10;
+      window._RF_WARMUP   = parseInt(p.get('warmup'))   || 3;
     })();
 
     let _cameraStream   = null;
@@ -244,6 +372,10 @@
     let _markerVisible  = false;
     let _userPaused     = false;
     let _audioEnabled   = true;
+    let _currentZoom     = 1.0;
+    let _pinchStartDist  = null;
+    let _pinchStartZoom  = 1.0;
+    let _zoomBadgeTimer  = null;
 
     // CK用変数
     let _ckCanvas  = null;
@@ -364,6 +496,17 @@
         }
         _cameraStream = stream;
 
+        // 一時的なvideo要素で再生をトリガーし、iOSのセキュリティロックを解除
+        const tempVideo = document.createElement('video');
+        tempVideo.setAttribute('playsinline', '');
+        tempVideo.setAttribute('webkit-playsinline', '');
+        tempVideo.muted = true;
+        tempVideo.srcObject = stream;
+        tempVideo.play().then(() => {
+          tempVideo.pause();
+          tempVideo.srcObject = null;
+        }).catch(e => console.log('iOS camera play protection bypass failed:', e));
+
         // GUM Override（MindARに取得済みストリームを渡す）
         setupGUMOverride();
 
@@ -414,15 +557,26 @@
           }
         })(0);
 
+        // 背景を透明にする（iOS黒画面対策）
+        document.body.classList.add('ar-active');
+        document.documentElement.classList.add('ar-active');
+
         // HUD表示
         document.getElementById('screen-landing').style.display = 'none';
         document.getElementById('ar-status-bar').style.display = 'flex';
+        document.getElementById('ar-hud').style.display = 'flex';
         document.getElementById('ar-tip').style.display = 'block';
         document.getElementById('ar-tip').classList.remove('hidden');
         document.getElementById('pulsedot').className = 'pulsedot searching';
         document.getElementById('status-label').textContent = 'マーカーを探しています...';
 
+        _audioEnabled = true;
+        document.getElementById('icon-sound-on').style.display = '';
+        document.getElementById('icon-sound-off').style.display = 'none';
+        document.getElementById('lbl-audio-toggle').textContent = '音声ON';
+
         document.addEventListener('click', handleTap);
+        initPinchZoom();
         setTimeout(() => attachEvents(), 1000);
 
       } catch(e) {
@@ -431,6 +585,7 @@
         if (failedScene) failedScene.remove();
         document.getElementById('screen-landing').style.display = 'flex';
         document.getElementById('ar-status-bar').style.display = 'none';
+        document.getElementById('ar-hud').style.display = 'none';
         document.getElementById('ar-tip').style.display = 'none';
         alert('AR の起動に失敗しました。\n' + e.message);
       } finally {
@@ -440,6 +595,10 @@
     }
 
     function stopAR() {
+      // 背景透過を解除
+      document.body.classList.remove('ar-active');
+      document.documentElement.classList.remove('ar-active');
+
       stopCKLoop();
       const scene = document.getElementById('main-scene');
       if (scene) {
@@ -451,9 +610,11 @@
       if (vid) vid.pause();
       if (_cameraStream) { _cameraStream.getTracks().forEach(t => t.stop()); _cameraStream = null; }
       document.removeEventListener('click', handleTap);
+      removePinchZoom();
       _markerVisible = false;
       _userPaused = false;
       document.getElementById('ar-status-bar').style.display = 'none';
+      document.getElementById('ar-hud').style.display = 'none';
       document.getElementById('ar-tip').style.display = 'none';
       document.getElementById('screen-landing').style.display = 'flex';
     }
@@ -477,8 +638,9 @@
 
         const scene = document.createElement('a-scene');
         scene.id = 'main-scene';
-        scene.setAttribute('mindar-image', 'imageTargetSrc: ./mindar-target.mind; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: 0.1; filterBeta: 1000; missTolerance: 10; warmupTolerance: 3');
-        scene.setAttribute('renderer', 'antialias: false; physicallyCorrectLights: false');
+        const mindarAttr = `imageTargetSrc: ./mindar-target.mind; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: ${window._RF_MINCF}; filterBeta: ${window._RF_BETA}; missTolerance: ${window._RF_MISS}; warmupTolerance: ${window._RF_WARMUP}`;
+        scene.setAttribute('mindar-image', mindarAttr);
+        scene.setAttribute('renderer', 'colorManagement: true; physicallyCorrectLights: false; antialias: false; alpha: true');
         scene.setAttribute('vr-mode-ui', 'enabled: false');
         scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
 
@@ -519,7 +681,10 @@
         document.getElementById('status-label').textContent = '動画を再生中';
         document.getElementById('ar-tip').classList.add('hidden');
         const vid = document.getElementById('ar-video');
-        if (vid) { vid.muted = false; vid.play().catch(() => { vid.muted = true; }); }
+        if (vid) {
+          vid.muted = !_audioEnabled;
+          vid.play().catch(() => { vid.muted = true; });
+        }
       });
 
       target.addEventListener('targetLost', () => {
@@ -539,13 +704,13 @@
       if (!vid) return;
       if (_userPaused) {
         _userPaused = false;
-        vid.muted = false;
+        vid.muted = !_audioEnabled;
         vid.play().catch(() => {});
         document.getElementById('status-label').textContent = '動画を再生中';
       } else {
         _userPaused = true;
         vid.pause();
-        document.getElementById('status-label').textContent = '一時停止中 — タップで再生';
+        document.getElementById('status-label').textContent = '一時停止中';
       }
     }
 
@@ -578,6 +743,189 @@
         } catch(e) {}
       }, 500);
     });
+
+    /* ══════════════════════════════════════
+       追加機能 (音声、全画面、再確認、ピンチズーム)
+    ══════════════════════════════════════ */
+    async function rescanMarker() {
+      if (!_cameraStream) return;
+
+      const btn = document.getElementById('btn-rescan');
+      btn.disabled = true;
+
+      _markerVisible = false;
+      _userPaused = false;
+
+      const vid = document.getElementById('ar-video');
+      if (vid) { vid.pause(); vid.muted = true; }
+
+      const dot = document.getElementById('pulsedot');
+      dot.classList.remove('found');
+      dot.classList.add('searching');
+      document.getElementById('status-label').textContent = '再確認中...';
+      document.getElementById('ar-tip').classList.remove('hidden');
+
+      const _savedTrackStops = [];
+      _cameraStream.getTracks().forEach(t => {
+        const orig = t.stop.bind(t);
+        _savedTrackStops.push({ t, orig });
+        t.stop = function() {};
+      });
+
+      const oldScene = document.getElementById('main-scene');
+      if (oldScene) {
+        const sys = oldScene.systems && oldScene.systems['mindar-image-system'];
+        if (sys) { try { sys.stop(); } catch(e) {} }
+      }
+
+      await new Promise(r => setTimeout(r, 300));
+
+      _savedTrackStops.forEach(({ t, orig }) => { t.stop = orig; });
+
+      if (window._CK_ENABLED) stopCKLoop();
+      setupGUMOverride();
+      const newScene = await buildScene(VIEWER_VIDEO_SRC);
+      applyCSSZoom(_currentZoom);
+
+      if (window._CK_ENABLED && vid) {
+        stopCKLoop();
+        initAndStartCK(vid, newScene);
+      }
+
+      rebindPinchZoom();
+      document.getElementById('status-label').textContent = '画像を探しています...';
+      setTimeout(attachEvents, 1000);
+      btn.disabled = false;
+    }
+
+    function toggleAudio() {
+      _audioEnabled = !_audioEnabled;
+      const vid = document.getElementById('ar-video');
+      if (vid) vid.muted = !_audioEnabled;
+      document.getElementById('icon-sound-on').style.display = _audioEnabled ? '' : 'none';
+      document.getElementById('icon-sound-off').style.display = _audioEnabled ? 'none' : '';
+      document.getElementById('lbl-audio-toggle').textContent = _audioEnabled ? '音声ON' : '音声OFF';
+      syncFsAudioUI(_audioEnabled);
+    }
+
+    function enterFullscreenMode() {
+      const arVideo = document.getElementById('ar-video');
+      if (!arVideo) return;
+      const fsVideo = document.getElementById('fs-video');
+      const streamSrc = (window._CK_ENABLED && _ckCanvas && _ckCanvas.captureStream)
+        ? _ckCanvas : arVideo;
+      if (streamSrc.captureStream) {
+        fsVideo.srcObject = streamSrc.captureStream();
+        fsVideo.muted = false;
+      } else {
+        fsVideo.src = arVideo.currentSrc;
+        fsVideo.currentTime = arVideo.currentTime;
+        fsVideo.muted = arVideo.muted;
+      }
+      fsVideo.play().catch(() => { fsVideo.muted = true; fsVideo.play().catch(() => {}); });
+      syncFsAudioUI(_audioEnabled);
+      document.getElementById('fs-overlay').style.display = 'flex';
+    }
+
+    function exitFullscreenMode() {
+      const fsVideo = document.getElementById('fs-video');
+      fsVideo.pause();
+      fsVideo.srcObject = null;
+      fsVideo.src = '';
+      document.getElementById('fs-overlay').style.display = 'none';
+    }
+
+    function toggleFsAudio() {
+      const fsVideo = document.getElementById('fs-video');
+      _audioEnabled = !_audioEnabled;
+      const arVideo = document.getElementById('ar-video');
+      if (arVideo) arVideo.muted = !_audioEnabled;
+      if (fsVideo) fsVideo.muted = !_audioEnabled;
+      document.getElementById('icon-sound-on').style.display = _audioEnabled ? '' : 'none';
+      document.getElementById('icon-sound-off').style.display = _audioEnabled ? 'none' : '';
+      document.getElementById('lbl-audio-toggle').textContent = _audioEnabled ? '音声ON' : '音声OFF';
+      syncFsAudioUI(_audioEnabled);
+    }
+
+    function syncFsAudioUI(enabled) {
+      document.getElementById('fs-icon-sound-on').style.display = enabled ? '' : 'none';
+      document.getElementById('fs-icon-sound-off').style.display = enabled ? 'none' : '';
+      document.getElementById('fs-lbl-audio').textContent = enabled ? '音声ON' : '音声OFF';
+    }
+
+    /* ピンチズーム */
+    function getPinchDist(t) {
+      const dx = t[0].clientX - t[1].clientX;
+      const dy = t[0].clientY - t[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function applyCSSZoom(z) {
+      const vp = document.getElementById('ar-viewport');
+      if (!vp) return;
+      vp.style.transformOrigin = 'center center';
+      vp.style.transform = (z <= 1.001) ? '' : `scale(${z})`;
+    }
+
+    function applyZoom(z) {
+      _currentZoom = z;
+      applyCSSZoom(z);
+      showZoomBadge(z);
+    }
+
+    function showZoomBadge(z) {
+      const el = document.getElementById('zoom-badge');
+      if (!el) return;
+      el.textContent = z.toFixed(1) + '×';
+      el.style.opacity = '1';
+      clearTimeout(_zoomBadgeTimer);
+      _zoomBadgeTimer = setTimeout(() => { el.style.opacity = '0'; }, 1500);
+    }
+
+    function onPinchStart(e) {
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      _pinchStartDist = getPinchDist(e.touches);
+      _pinchStartZoom = _currentZoom;
+    }
+
+    function onPinchMove(e) {
+      if (e.touches.length !== 2 || _pinchStartDist === null) return;
+      e.preventDefault();
+      const rawRatio = getPinchDist(e.touches) / _pinchStartDist;
+      const dampedRatio = 1.0 + (rawRatio - 1.0) * 0.5;
+      const newZ = Math.max(1.0, Math.min(4.0, _pinchStartZoom * dampedRatio));
+      newZ = Math.max(1.0, Math.min(4.0, newZ));
+      applyZoom(newZ);
+    }
+
+    function onPinchEnd(e) {
+      if (e.touches.length < 2) _pinchStartDist = null;
+    }
+
+    function initPinchZoom() {
+      document.addEventListener('touchstart', onPinchStart, { passive: false });
+      document.addEventListener('touchmove',  onPinchMove,  { passive: false });
+      document.addEventListener('touchend',   onPinchEnd,   { passive: false });
+    }
+
+    function rebindPinchZoom() {
+      document.removeEventListener('touchstart', onPinchStart);
+      document.removeEventListener('touchmove',  onPinchMove);
+      document.removeEventListener('touchend',   onPinchEnd);
+      document.addEventListener('touchstart', onPinchStart, { passive: false });
+      document.addEventListener('touchmove',  onPinchMove,  { passive: false });
+      document.addEventListener('touchend',   onPinchEnd,   { passive: false });
+    }
+
+    function removePinchZoom() {
+      document.removeEventListener('touchstart', onPinchStart);
+      document.removeEventListener('touchmove',  onPinchMove);
+      document.removeEventListener('touchend',   onPinchEnd);
+      applyCSSZoom(1.0);
+      _currentZoom = 1.0;
+      _pinchStartDist = null;
+    }
   </script>
 </body>
 </html>
