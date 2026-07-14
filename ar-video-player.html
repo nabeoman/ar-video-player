@@ -880,7 +880,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v2.6.2 &nbsp;·&nbsp; 2026-07-14</span>
+      <span class="version-badge">v2.6.3 &nbsp;·&nbsp; 2026-07-14</span>
     </div>
 
     <div class="steps-container">
@@ -1074,7 +1074,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.6.2</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v2.6.3</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -1441,6 +1441,7 @@
 
     function saveAdjust() {
       localStorage.setItem(getAdjustKey(), JSON.stringify({ h: _dbgH, y: _dbgY }));
+      refreshViewerURL();
       const msg = document.getElementById('dc-saved-msg');
       msg.style.display = 'block';
       setTimeout(() => { msg.style.display = 'none'; }, 2000);
@@ -2442,11 +2443,16 @@
 
     function buildViewerURL() {
       const base = 'https://nabeoman.github.io/ar-video-player/ar-viewer.html';
+      const saved = loadSavedAdjust();
+      const hVal = saved ? saved.h : _dbgH;
+      const yVal = saved ? saved.y : _dbgY;
       const params = {
         minCF: _rfMinCF.toFixed(3),
         beta: _rfBeta.toString(),
         miss: _rfMissTol.toString(),
-        warmup: _rfWarmTol.toString()
+        warmup: _rfWarmTol.toString(),
+        h: hVal.toFixed(4),
+        y: yVal.toFixed(4)
       };
       if (_ckEnabled) {
         params.ck = '1';

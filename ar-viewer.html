@@ -347,13 +347,13 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.6.2</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.6.3</p>
   </div>
 
   <script>
     const MINDAR_HEIGHT_CORRECTION = 1.071;
 
-    // URLパラメータからCK設定とトラッキング設定を読み取る
+    // URLパラメータからCK設定、トラッキング設定、位置調整設定を読み取る
     (function() {
       const p = new URLSearchParams(location.search);
       window._CK_ENABLED  = p.get('ck') === '1';
@@ -365,6 +365,9 @@
       window._RF_BETA     = parseInt(p.get('beta'))     || 1000;
       window._RF_MISS     = parseInt(p.get('miss'))     || 10;
       window._RF_WARMUP   = parseInt(p.get('warmup'))   || 3;
+      // 位置・高さ調整パラメータ
+      window._ADJ_H       = p.get('h') ? parseFloat(p.get('h')) : null;
+      window._ADJ_Y       = p.get('y') ? parseFloat(p.get('y')) : null;
     })();
 
     let _cameraStream   = null;
@@ -543,15 +546,22 @@
           initAndStartCK(vid, scene);
         }
 
-        // アスペクト比設定
+        // アスペクト比・位置調整設定の適用
         (function applyRatio(n) {
           if (!scene.isConnected) return;
           const v2 = scene.querySelector('#ar-video');
           const av = scene.querySelector(window._CK_ENABLED ? '#ar-ck-plane' : 'a-video');
           if (v2 && av && v2.videoWidth > 0) {
-            const h = (v2.videoHeight / v2.videoWidth) * MINDAR_HEIGHT_CORRECTION;
+            let h = window._ADJ_H;
+            let y = window._ADJ_Y;
+            if (h === null) {
+              h = (v2.videoHeight / v2.videoWidth) * MINDAR_HEIGHT_CORRECTION;
+            }
+            if (y === null) {
+              y = -0.06;
+            }
             av.setAttribute('height', h);
-            av.setAttribute('position', '0 -0.06 0.001');
+            av.setAttribute('position', `0 ${y} 0.001`);
           } else if (n < 19) {
             setTimeout(() => applyRatio(n + 1), 250);
           }
@@ -791,6 +801,27 @@
         stopCKLoop();
         initAndStartCK(vid, newScene);
       }
+
+      // アスペクト比・位置調整の適用
+      (function applyRatio(n) {
+        if (!newScene.isConnected) return;
+        const v2 = newScene.querySelector('#ar-video');
+        const av = newScene.querySelector(window._CK_ENABLED ? '#ar-ck-plane' : 'a-video');
+        if (v2 && av && v2.videoWidth > 0) {
+          let h = window._ADJ_H;
+          let y = window._ADJ_Y;
+          if (h === null) {
+            h = (v2.videoHeight / v2.videoWidth) * MINDAR_HEIGHT_CORRECTION;
+          }
+          if (y === null) {
+            y = -0.06;
+          }
+          av.setAttribute('height', h);
+          av.setAttribute('position', `0 ${y} 0.001`);
+        } else if (n < 19) {
+          setTimeout(() => applyRatio(n + 1), 250);
+        }
+      })(0);
 
       rebindPinchZoom();
       document.getElementById('status-label').textContent = '画像を探しています...';
