@@ -360,7 +360,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.7.3</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v2.8.0</p>
   </div>
 
   <script>
@@ -605,7 +605,7 @@
         // アスペクト比・位置調整設定の適用
         (function applyRatio(n) {
           if (!scene.isConnected) return;
-          const v2 = scene.querySelector('#ar-video');
+          const v2 = document.getElementById('ar-video');
           const av = scene.querySelector(window._CK_ENABLED ? '#ar-ck-plane' : 'a-video');
           if (v2 && av && v2.videoWidth > 0) {
             let h = window._ADJ_H;
@@ -876,7 +876,7 @@
       // アスペクト比・位置調整の適用
       (function applyRatio(n) {
         if (!scene.isConnected) return;
-        const v2 = scene.querySelector('#ar-video');
+        const v2 = document.getElementById('ar-video');
         const av = scene.querySelector(window._CK_ENABLED ? '#ar-ck-plane' : 'a-video');
         if (v2 && av && v2.videoWidth > 0) {
           let h = window._ADJ_H;

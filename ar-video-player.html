@@ -848,18 +848,18 @@
     <div class="rf-ctrl">
       <div class="dc-row">
         <span class="dc-label">MinCF</span>
-        <button class="dc-btn" onclick="adjRF('minCF',-0.01)">−</button>
+        <button class="dc-btn" onclick="adjRF('minCF',-0.001)">−</button>
         <span class="dc-val" id="rf-mincf-val">0.100</span>
-        <button class="dc-btn" onclick="adjRF('minCF',+0.01)">+</button>
+        <button class="dc-btn" onclick="adjRF('minCF',+0.001)">+</button>
       </div>
-      <div class="rf-desc">追従遅延 &nbsp;0.001(遅/滑) ↔ 1.0(速/ブレ) &nbsp;step:0.01</div>
+      <div class="rf-desc">追従遅延 &nbsp;0.001(遅/滑) ↔ 1.0(速/ブレ) &nbsp;step:0.001</div>
       <div class="dc-row">
         <span class="dc-label">Beta</span>
-        <button class="dc-btn" onclick="adjRF('beta',-100)">−</button>
+        <button class="dc-btn" onclick="adjRF('beta',-10)">−</button>
         <span class="dc-val" id="rf-beta-val">1000</span>
-        <button class="dc-btn" onclick="adjRF('beta',+100)">+</button>
+        <button class="dc-btn" onclick="adjRF('beta',+10)">+</button>
       </div>
-      <div class="rf-desc">高速追従 &nbsp;0(低) ↔ 5000(高) &nbsp;step:100</div>
+      <div class="rf-desc">高速追従 &nbsp;0(低) ↔ 5000(高) &nbsp;step:10</div>
       <div class="dc-row">
         <span class="dc-label">Miss</span>
         <button class="dc-btn" onclick="adjRF('miss',-1)">−</button>
@@ -1430,7 +1430,7 @@
         const dbgInfo = document.getElementById('debug-info');
         (function applyRatio(n) {
           if (!scene.isConnected) return;
-          const v2   = scene.querySelector('#ar-video');
+          const v2   = document.getElementById('ar-video');
           const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
           if (v2 && aVid && v2.videoWidth > 0) {
             const pixelRatio = v2.videoHeight / v2.videoWidth;
@@ -1445,6 +1445,19 @@
             dbgInfo.dataset.baseH = corrected.toFixed(4);
           } else if (n < 19) {
             setTimeout(() => applyRatio(n + 1), 250);
+          } else {
+            const saved = loadSavedAdjust();
+            if (!saved) {
+              _dbgH = 0.5625;
+              _dbgY = -0.06;
+              if (aVid) {
+                aVid.setAttribute('height', _dbgH);
+                aVid.setAttribute('position', `0 ${_dbgY} 0.001`);
+              }
+              document.getElementById('dc-h-val').textContent = _dbgH.toFixed(4);
+              document.getElementById('dc-y-val').textContent = _dbgY.toFixed(4);
+            }
+            dbgInfo.textContent = `[WARN] videoWidth 取得失敗\nheight 未変更 (${_dbgH.toFixed(4)})`;
           }
         })(0);
       }
@@ -1496,6 +1509,20 @@
       } catch(e) { return null; }
     }
 
+    function initAdjustSettingsForTab() {
+      const saved = loadSavedAdjust();
+      if (saved) {
+        _dbgH = saved.h;
+        _dbgY = saved.y;
+      } else {
+        _dbgH = 0.5625;
+        _dbgY = -0.06;
+      }
+      document.getElementById('dc-h-val').textContent = _dbgH.toFixed(4);
+      document.getElementById('dc-y-val').textContent = _dbgY.toFixed(4);
+      refreshViewerURL();
+    }
+
     function saveAdjust() {
       localStorage.setItem(getAdjustKey(), JSON.stringify({ h: _dbgH, y: _dbgY }));
       refreshViewerURL();
@@ -1537,6 +1564,9 @@
         document.getElementById('panel-' + id).classList.toggle('active', id === tab));
       // URLタブ選択時はYouTube入力中の可能性があるため、CKチェックをリアルタイムで評価
       _updateCKAvailability();
+
+      // 切り替え時に新しいタブの保存値を同期ロード
+      initAdjustSettingsForTab();
 
       // 切り替え時に現在選択されているソースをプレロード
       try {
@@ -1936,7 +1966,7 @@
           document.getElementById('dc-op-val').textContent = '100%';
           (function applyRatio(n) {
             if (!scene.isConnected) { dbg.style.display = 'none'; return; }
-            const v2  = scene.querySelector('#ar-video');
+            const v2  = document.getElementById('ar-video');
             const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
             if (v2 && aVid && v2.videoWidth > 0) {
               const pixelRatio = v2.videoHeight / v2.videoWidth;
@@ -1961,7 +1991,18 @@
                 `video  : ${v2 ? v2.videoWidth : '?'} × ${v2 ? v2.videoHeight : '?'}px`;
               setTimeout(() => applyRatio(n + 1), 250);
             } else {
-              dbgInfo.textContent = `[WARN] videoWidth 取得失敗\nheight 未変更 (0.5625)`;
+              const saved = loadSavedAdjust();
+              if (!saved) {
+                _dbgH = 0.5625;
+                _dbgY = -0.06;
+                if (aVid) {
+                  aVid.setAttribute('height', _dbgH);
+                  aVid.setAttribute('position', `0 ${_dbgY} 0.001`);
+                }
+                document.getElementById('dc-h-val').textContent = _dbgH.toFixed(4);
+                document.getElementById('dc-y-val').textContent = _dbgY.toFixed(4);
+              }
+              dbgInfo.textContent = `[WARN] videoWidth 取得失敗\nheight 未変更 (${_dbgH.toFixed(4)})`;
             }
           })(0);
         }
@@ -2121,7 +2162,7 @@
         const dbgInfo = document.getElementById('debug-info');
         (function applyRatio(n) {
           if (!scene.isConnected) return;
-          const v2   = scene.querySelector('#ar-video');
+          const v2   = document.getElementById('ar-video');
           const aVid = scene.querySelector(_ckEnabled ? '#ar-ck-plane' : 'a-video');
           if (v2 && aVid && v2.videoWidth > 0) {
             const pixelRatio = v2.videoHeight / v2.videoWidth;
@@ -2136,6 +2177,18 @@
             dbgInfo.dataset.baseH = corrected.toFixed(4);
           } else if (n < 19) {
             setTimeout(() => applyRatio(n + 1), 250);
+          } else {
+            const saved = loadSavedAdjust();
+            if (!saved) {
+              _dbgH = 0.5625;
+              _dbgY = -0.06;
+              if (aVid) {
+                aVid.setAttribute('height', _dbgH);
+                aVid.setAttribute('position', `0 ${_dbgY} 0.001`);
+              }
+              document.getElementById('dc-h-val').textContent = _dbgH.toFixed(4);
+              document.getElementById('dc-y-val').textContent = _dbgY.toFixed(4);
+            }
           }
         })(0);
       }
@@ -2511,6 +2564,7 @@
     loadCKSettings();
     syncCKPanel();
     initViewerPanel();
+    initAdjustSettingsForTab();
 
     /* ══════════════════════════════════════
        ビューワー設定パネル
