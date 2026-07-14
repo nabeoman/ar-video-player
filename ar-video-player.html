@@ -979,7 +979,7 @@
       <div class="step-card" style="padding-top:0.85rem;padding-bottom:0.85rem">
         <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer">
           <input type="checkbox" id="ck-enabled-chk" style="width:17px;height:17px;accent-color:#5c6ef5;flex-shrink:0"
-            onchange="_ckEnabled=this.checked;syncCKPanel()">
+            onchange="_ckEnabled=this.checked;syncCKPanel();refreshViewerURL()">
           <span style="font-size:0.95rem;font-weight:600;color:var(--text)">クロマキー合成</span>
           <span style="font-size:0.72rem;color:#5c6ef5;background:rgba(92,110,245,0.13);padding:0.1rem 0.45rem;border-radius:4px;font-weight:700">NEW</span>
         </label>
@@ -2190,12 +2190,14 @@
       localStorage.setItem('ar-ck-settings', JSON.stringify({
         color: _ckColorKey, sim: _ckSimilarity, smt: _ckSmoothness
       }));
+      refreshViewerURL();
       showCKMsg('✓ 保存しました');
     }
 
     function resetCKSettings() {
       _ckColorKey = 'green'; _ckSimilarity = 0.40; _ckSmoothness = 0.08;
       syncCKPanel();
+      refreshViewerURL();
       showCKMsg('✓ リセットしました');
     }
 
