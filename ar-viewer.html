@@ -66,6 +66,7 @@
 
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -365,7 +366,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.0.0</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.1.0</p>
   </div>
 
   <script>
@@ -540,13 +541,18 @@
         // マーカー画像コンパイル（初回のみ）
         if (!_compiledBuffer) {
           btn.textContent = '画像を解析中...';
-          let img;
           try {
-            img = await loadImage(VIEWER_MARKER_SRC, 'anonymous');
+            let img;
+            try {
+              img = await loadImage(VIEWER_MARKER_SRC, 'anonymous');
+            } catch(e) {
+              img = await loadImage('./hiro.png', 'anonymous');
+            }
+            _compiledBuffer = await compileMarker(img);
           } catch(e) {
-            img = await loadImage('./hiro.png', 'anonymous');
+            console.warn('事前コンパイルに失敗しました。サーバーからのロードへフォールバックします:', e);
+            _compiledBuffer = null;
           }
-          _compiledBuffer = await compileMarker(img);
         }
         window._mindARBuffer = _compiledBuffer;
 
