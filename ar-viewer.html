@@ -27,7 +27,7 @@
       };
     })();
 
-    // fetch interceptor: dpdb.json抑止 + MindARターゲット配信
+    // fetch interceptor: dpdb.json抑止
     (function() {
       var _fetch = window.fetch;
       window.fetch = function(url, opts) {
@@ -36,9 +36,6 @@
             return Promise.resolve(new Response('{"devices":[]}', {
               headers: { 'Content-Type': 'application/json' }
             }));
-          }
-          if (url.indexOf('mindar-target.mind') !== -1 && window._mindARBuffer) {
-            return Promise.resolve(new Response(window._mindARBuffer.slice(0)));
           }
         }
         return _fetch.apply(this, arguments);
@@ -66,7 +63,6 @@
 
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -366,7 +362,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.1.0</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.1.1</p>
   </div>
 
   <script>
@@ -537,24 +533,6 @@
 
         // GUM Override（MindARに取得済みストリームを渡す）
         setupGUMOverride();
-
-        // マーカー画像コンパイル（初回のみ）
-        if (!_compiledBuffer) {
-          btn.textContent = '画像を解析中...';
-          try {
-            let img;
-            try {
-              img = await loadImage(VIEWER_MARKER_SRC, 'anonymous');
-            } catch(e) {
-              img = await loadImage('./hiro.png', 'anonymous');
-            }
-            _compiledBuffer = await compileMarker(img);
-          } catch(e) {
-            console.warn('事前コンパイルに失敗しました。サーバーからのロードへフォールバックします:', e);
-            _compiledBuffer = null;
-          }
-        }
-        window._mindARBuffer = _compiledBuffer;
 
         btn.textContent = 'AR を初期化中...';
         const scene = document.getElementById('main-scene');
@@ -769,26 +747,6 @@
         img.src = src;
       });
     }
-
-    async function compileMarker(imgEl) {
-      const compiler = new MINDAR.IMAGE.Compiler();
-      await compiler.compileImageTargets([imgEl], () => {});
-      const buf = await compiler.exportData();
-      return buf;
-    }
-
-    // ページ読み込み後にバックグラウンドでマーカーをコンパイル
-    window.addEventListener('load', () => {
-      setTimeout(async () => {
-        if (_compiledBuffer) return;
-        try {
-          let img;
-          try { img = await loadImage(VIEWER_MARKER_SRC, 'anonymous'); }
-          catch(e) { img = await loadImage('./hiro.png', 'anonymous'); }
-          _compiledBuffer = await compileMarker(img);
-        } catch(e) {}
-      }, 500);
-    });
 
     /* ══════════════════════════════════════
        追加機能 (音声、全画面、再確認、ピンチズーム)
