@@ -279,13 +279,6 @@
   <div id="ar-hud">
     <!-- ユーザー用ボタン（左） -->
     <div style="display:flex;gap:0.5rem;align-items:center;">
-      <button class="btn-exit" id="btn-rescan" onclick="rescanMarker()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
-          <polyline points="1 4 1 10 7 10"></polyline>
-          <path d="M3.51 15a9 9 0 1 0 .49-4.95"></path>
-        </svg>
-        再確認
-      </button>
       <button class="btn-exit" id="btn-fullscreen" onclick="enterFullscreenMode()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px">
           <polyline points="15 3 21 3 21 9"></polyline>
@@ -362,7 +355,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.1.2</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.3.0</p>
   </div>
 
   <script>
@@ -749,101 +742,8 @@
     }
 
     /* ══════════════════════════════════════
-       追加機能 (音声、全画面、再確認、ピンチズーム)
+       追加機能 (音声、全画面、ピンチズーム)
     ══════════════════════════════════════ */
-    async function rescanMarker() {
-      if (!_cameraStream) return;
-
-      const btn = document.getElementById('btn-rescan');
-      btn.disabled = true;
-
-      _markerVisible = false;
-      _userPaused = false;
-
-      const vid = document.getElementById('ar-video');
-      if (vid) { vid.pause(); vid.muted = true; }
-
-      const dot = document.getElementById('pulsedot');
-      dot.classList.remove('found');
-      dot.classList.add('searching');
-      document.getElementById('status-label').textContent = '再確認中...';
-      document.getElementById('ar-tip').classList.remove('hidden');
-
-      const oldScene = document.getElementById('main-scene');
-      if (oldScene) {
-        const sys = oldScene.systems && oldScene.systems['mindar-image-system'];
-        if (sys) { try { sys.stop(); } catch(e) {} }
-      }
-
-      await new Promise(r => setTimeout(r, 100));
-
-      if (window._CK_ENABLED) stopCKLoop();
-      setupGUMOverride();
-
-      // パラメータを再設定してMindARを再スタート
-      const scene = document.getElementById('main-scene');
-      const mindarAttr = `imageTargetSrc: ./mindar-target.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: ${window._RF_MINCF}; filterBeta: ${window._RF_BETA}; missTolerance: ${window._RF_MISS}; warmupTolerance: ${window._RF_WARMUP}`;
-      scene.setAttribute('mindar-image', mindarAttr);
-
-      // ターゲットの中身を再構築
-      const avEl = document.getElementById('ar-video-el');
-      const planeEl = document.getElementById('ar-ck-plane');
-      if (avEl) avEl.setAttribute('visible', !window._CK_ENABLED ? 'true' : 'false');
-      if (planeEl) planeEl.setAttribute('visible', window._CK_ENABLED ? 'true' : 'false');
-
-      const sys = scene.systems && scene.systems['mindar-image-system'];
-      if (sys) {
-        // autoStart: falseによるthis.ui未定義バグの対策ハック
-        if (!sys.ui) {
-          sys.ui = {
-            showLoading: () => {},
-            hideLoading: () => {},
-            showScanning: () => {},
-            hideScanning: () => {},
-            showError: () => {},
-            hideError: () => {}
-          };
-        } else {
-          if (!sys.ui.showLoading) sys.ui.showLoading = () => {};
-          if (!sys.ui.hideLoading) sys.ui.hideLoading = () => {};
-          if (!sys.ui.showScanning) sys.ui.showScanning = () => {};
-          if (!sys.ui.hideScanning) sys.ui.hideScanning = () => {};
-        }
-        await sys.start();
-      }
-      applyCSSZoom(_currentZoom);
-
-      if (window._CK_ENABLED && vid) {
-        stopCKLoop();
-        initAndStartCK(vid, scene);
-      }
-
-      // アスペクト比・位置調整の適用
-      (function applyRatio(n) {
-        if (!scene.isConnected) return;
-        const v2 = document.getElementById('ar-video');
-        const av = document.getElementById(window._CK_ENABLED ? 'ar-ck-plane' : 'ar-video-el');
-        if (v2 && av && v2.videoWidth > 0) {
-          let h = window._ADJ_H;
-          let y = window._ADJ_Y;
-          if (h === null) {
-            h = (v2.videoHeight / v2.videoWidth) * MINDAR_HEIGHT_CORRECTION;
-          }
-          if (y === null) {
-            y = -0.06;
-          }
-          av.setAttribute('height', h);
-          av.setAttribute('position', `0 ${y} 0.001`);
-        } else if (n < 19) {
-          setTimeout(() => applyRatio(n + 1), 250);
-        }
-      })(0);
-
-      rebindPinchZoom();
-      document.getElementById('status-label').textContent = '画像を探しています...';
-      setTimeout(attachEvents, 1000);
-      btn.disabled = false;
-    }
 
     function toggleAudio() {
       _audioEnabled = !_audioEnabled;
