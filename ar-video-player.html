@@ -935,7 +935,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v3.4.1 &nbsp;·&nbsp; 2026-07-15</span>
+      <span class="version-badge">v3.4.2 &nbsp;·&nbsp; 2026-07-15</span>
     </div>
 
     <div class="steps-container">
@@ -1129,7 +1129,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v3.4.1</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v3.4.2</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -1462,6 +1462,10 @@
       el._timer = setTimeout(() => { el.style.display = 'none'; }, duration || 2200);
     }
 
+    // 設定スキーマのバージョン。v3.4.2で minCF の既定値を 0.1→0.001 に変更したため、
+    // 旧デフォルト(0.1)が保存されている端末を移行する必要がある
+    const RF_SETTINGS_VERSION = 2;
+
     function loadRFSettings() {
       try {
         const s = localStorage.getItem('ar-rf-settings');
@@ -1474,16 +1478,26 @@
         if (typeof d.stable       === 'boolean') _stableOn     = d.stable;
         if (typeof d.stableAlpha  === 'number')  _stableAlpha  = d.stableAlpha;
         if (typeof d.stableFreeze === 'number')  _stableFreeze = d.stableFreeze;
+
+        // v3.4.2 移行：旧デフォルトの minCF=0.1 が保存されている端末を 0.001 へ引き上げる。
+        // 0.1 は MindAR既定値の100倍で、静止時の平滑化がほぼ効かずぷるぷるの主因になる。
+        // 保存値が優先されるため、これをやらないと既定値の修正が効かない端末が残る。
+        if (d.v !== RF_SETTINGS_VERSION && _rfMinCF === 0.1) {
+          _rfMinCF = 0.001;
+          saveRFOnlySettings(true);
+          console.info('[migration] minCF 0.1 → 0.001 (v3.4.2)');
+        }
       } catch(e) {}
       syncRFPanel();
     }
 
-    function saveRFOnlySettings() {
+    function saveRFOnlySettings(silent) {
       localStorage.setItem('ar-rf-settings', JSON.stringify({
+        v: RF_SETTINGS_VERSION,
         minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol,
         stable: _stableOn, stableAlpha: _stableAlpha, stableFreeze: _stableFreeze
       }));
-      showRFMsg('✓ 保存しました');
+      if (!silent) showRFMsg('✓ 保存しました');
       refreshViewerURL();
     }
 
@@ -1531,6 +1545,7 @@
       await new Promise(r => setTimeout(r, 100));
 
       localStorage.setItem('ar-rf-settings', JSON.stringify({
+        v: RF_SETTINGS_VERSION,
         minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol,
         stable: _stableOn, stableAlpha: _stableAlpha, stableFreeze: _stableFreeze
       }));
@@ -1623,8 +1638,12 @@
 
     function resetRFSettings() {
       localStorage.removeItem('ar-rf-settings');
-      _rfMinCF = 0.1; _rfBeta = 1000; _rfMissTol = 10; _rfWarmTol = 3;
+      // minCF は MindAR既定値の 0.001。0.1 に戻すとぷるぷるが再発するので絶対に戻さないこと
+      _rfMinCF = 0.001; _rfBeta = 1000; _rfMissTol = 10; _rfWarmTol = 3;
+      _stableOn = false; _stableAlpha = 0.16; _stableFreeze = 250;
       syncRFPanel();
+      applyStableToAnchor();
+      refreshViewerURL();
       showRFMsg('✓ リセットしました');
     }
 
