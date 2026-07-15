@@ -355,7 +355,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.3.0</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.3.1</p>
   </div>
 
   <script>
@@ -363,6 +363,10 @@
 
     // URLパラメータからCK設定、トラッキング設定、位置調整設定を読み取る
     (function() {
+      // マーカープレビューのキャッシュバスター
+      const preview = document.getElementById('marker-preview');
+      if (preview) preview.src = './viewer-marker.png?v=' + Date.now();
+
       const p = new URLSearchParams(location.search);
       window._CK_ENABLED  = p.get('ck') === '1';
       window._CK_COLOR    = p.get('ckColor') || 'green';
@@ -531,7 +535,7 @@
         const scene = document.getElementById('main-scene');
 
         // パラメータを適用してMindARを設定
-        const mindarAttr = `imageTargetSrc: ./mindar-target.mind; autoStart: false; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: ${window._RF_MINCF}; filterBeta: ${window._RF_BETA}; missTolerance: ${window._RF_MISS}; warmupTolerance: ${window._RF_WARMUP}`;
+        const mindarAttr = `imageTargetSrc: ./mindar-target.mind?v=${Date.now()}; autoStart: false; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: ${window._RF_MINCF}; filterBeta: ${window._RF_BETA}; missTolerance: ${window._RF_MISS}; warmupTolerance: ${window._RF_WARMUP}`;
         scene.setAttribute('mindar-image', mindarAttr);
 
         // ターゲット内の中身を構築
@@ -621,10 +625,22 @@
 
         document.addEventListener('click', handleTap);
         initPinchZoom();
-        setTimeout(() => attachEvents(), 1000);
+        attachEvents();
 
       } catch(e) {
         console.error(e);
+        // カメラの解放
+        if (_cameraStream) {
+          try {
+            _cameraStream.getTracks().forEach(t => {
+              if (t._origStop) t.stop = t._origStop;
+              t.stop();
+            });
+          } catch(err) {}
+          _cameraStream = null;
+        }
+        document.body.classList.remove('ar-active');
+        document.documentElement.classList.remove('ar-active');
         document.getElementById('screen-landing').style.display = 'flex';
         document.getElementById('ar-status-bar').style.display = 'none';
         document.getElementById('ar-hud').style.display = 'none';
