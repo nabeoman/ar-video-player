@@ -258,7 +258,10 @@
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-      <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+      <!-- MindARの生トラッキング値を受けるだけ。表示要素は持たない -->
+      <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
+      <!-- 表示用アンカー（scene直下）。ar-target のワールド変換を追従する -->
+      <a-entity id="stable-anchor" visible="false">
         <!-- 通常用 a-video (初期非表示) -->
         <a-video id="ar-video-el" src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001" visible="false"></a-video>
         <!-- クロマキー用 a-plane (初期非表示) -->
@@ -351,7 +354,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.3.3</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.4.0</p>
   </div>
 
   <script>
@@ -369,14 +372,90 @@
       window._CK_SIM      = parseFloat(p.get('ckSim'))  || 0.40;
       window._CK_SMT      = parseFloat(p.get('ckSmt'))  || 0.08;
       // トラッキング感度パラメータ
-      window._RF_MINCF    = parseFloat(p.get('minCF'))  || 0.1;
+      // minCF の既定は MindAR 既定値 0.001。以前は 0.1（既定の100倍）でぷるぷるの原因だった
+      window._RF_MINCF    = parseFloat(p.get('minCF'))  || 0.001;
       window._RF_BETA     = parseInt(p.get('beta'))     || 1000;
       window._RF_MISS     = parseInt(p.get('miss'))     || 10;
       window._RF_WARMUP   = parseInt(p.get('warmup'))   || 3;
       // 位置・高さ調整パラメータ
       window._ADJ_H       = p.get('h') ? parseFloat(p.get('h')) : null;
       window._ADJ_Y       = p.get('y') ? parseFloat(p.get('y')) : null;
+      // 映像安定化パラメータ
+      // stable=0（既定）は alpha=1.0 の即時コピー ＝ 従来の直追従と同一挙動
+      window._STABLE      = p.get('stable') === '1';
+      window._STABLE_ALPHA = p.get('stableAlpha') ? parseFloat(p.get('stableAlpha')) : 0.16;
+      window._STABLE_FREEZE = p.get('stableFreezeMs') ? parseInt(p.get('stableFreezeMs')) : 250;
     })();
+
+    /* ══════════════════════════════════════
+       映像安定化アンカー (v3.4.0)
+       ar-target のワールド変換を stable-anchor へ追従コピーする。
+       alpha=1.0 は即時コピー＝従来の直追従と同一挙動。
+    ══════════════════════════════════════ */
+    AFRAME.registerComponent('stable-follow', {
+      schema: {
+        target:   { type: 'selector' },
+        alpha:    { type: 'number', default: 1.0 },
+        freezeMs: { type: 'number', default: 0 }
+      },
+      init: function() {
+        this._found  = false;
+        this._lostAt = 0;
+        this._snap   = true;   // targetFound直後は即時コピー（原点からの滑走を防ぐ）
+        this._p = new THREE.Vector3();
+        this._q = new THREE.Quaternion();
+        this._s = new THREE.Vector3();
+      },
+      // targetFound / targetLost から呼ぶ
+      setFound: function(found) {
+        if (found) {
+          this._found = true;
+          this._snap  = true;
+        } else {
+          this._found  = false;
+          this._lostAt = performance.now();
+        }
+      },
+      tick: function(time, timeDelta) {
+        const t = this.data.target;
+        const obj = this.el.object3D;
+        if (!t || !t.object3D) return;
+
+        if (!this._found) {
+          // ロスト後 freezeMs だけ最後の姿勢を保持してから隠す（チラつき防止）
+          if (this._lostAt && (performance.now() - this._lostAt) >= this.data.freezeMs) {
+            if (obj.visible) obj.visible = false;
+          }
+          return;
+        }
+
+        t.object3D.updateWorldMatrix(true, false);
+        t.object3D.matrixWorld.decompose(this._p, this._q, this._s);
+
+        if (this._snap || this.data.alpha >= 1.0) {
+          // 通常追従（stable=0）およびFound直後は完全コピー
+          obj.position.copy(this._p);
+          obj.quaternion.copy(this._q);
+          obj.scale.copy(this._s);
+          this._snap = false;
+        } else {
+          // フレームレート非依存化：60fps基準に正規化する。
+          // これをしないと30fpsに落ちたとき平滑化の効きが2倍変わる。
+          const dt = (timeDelta || 16.67) / 1000;
+          const a  = 1 - Math.pow(1 - this.data.alpha, dt * 60);
+          obj.position.lerp(this._p, a);
+          obj.quaternion.slerp(this._q, a);
+          obj.scale.lerp(this._s, a);
+        }
+        obj.visible = true;
+      }
+    });
+
+    function setAnchorFound(found) {
+      const anchor = document.getElementById('stable-anchor');
+      const comp = anchor && anchor.components && anchor.components['stable-follow'];
+      if (comp) comp.setFound(found);
+    }
 
     let _cameraStream   = null;
     let _compiledBuffer = null;
@@ -534,12 +613,24 @@
         const mindarAttr = `imageTargetSrc: ./mindar-target.mind?v=${Date.now()}; autoStart: false; uiLoading: no; uiError: no; uiScanning: no; filterMinCF: ${window._RF_MINCF}; filterBeta: ${window._RF_BETA}; missTolerance: ${window._RF_MISS}; warmupTolerance: ${window._RF_WARMUP}`;
         scene.setAttribute('mindar-image', mindarAttr);
 
-        // ターゲット内の中身を構築
+        // 表示要素の構築（stable-anchor 配下に1セット固定）
         const avEl = document.getElementById('ar-video-el');
         const planeEl = document.getElementById('ar-ck-plane');
 
         if (avEl) avEl.setAttribute('visible', !window._CK_ENABLED ? 'true' : 'false');
         if (planeEl) planeEl.setAttribute('visible', window._CK_ENABLED ? 'true' : 'false');
+
+        // 安定化アンカーの設定
+        // stable=0 → alpha=1.0 / freezeMs=0 で従来の直追従と同一挙動
+        const anchor = document.getElementById('stable-anchor');
+        if (anchor) {
+          anchor.setAttribute('stable-follow', {
+            target:   '#ar-target',
+            alpha:    window._STABLE ? window._STABLE_ALPHA : 1.0,
+            freezeMs: window._STABLE ? window._STABLE_FREEZE : 0
+          });
+          anchor.object3D.visible = false;
+        }
 
         const vid = document.getElementById('ar-video');
         if (vid) {
@@ -666,6 +757,10 @@
       if (avEl) avEl.setAttribute('visible', 'false');
       if (planeEl) planeEl.setAttribute('visible', 'false');
 
+      setAnchorFound(false);
+      const anchor = document.getElementById('stable-anchor');
+      if (anchor && anchor.object3D) anchor.object3D.visible = false;
+
       const vid = document.getElementById('ar-video');
       if (vid) vid.pause();
       if (_cameraStream) {
@@ -715,6 +810,7 @@
       target.addEventListener('targetFound', () => {
         _markerVisible = true;
         _userPaused = false;
+        setAnchorFound(true);
         document.getElementById('pulsedot').className = 'pulsedot found';
         document.getElementById('status-label').textContent = '動画を再生中';
         document.getElementById('ar-tip').classList.add('hidden');
@@ -727,6 +823,7 @@
 
       target.addEventListener('targetLost', () => {
         _markerVisible = false;
+        setAnchorFound(false);
         document.getElementById('pulsedot').className = 'pulsedot searching';
         document.getElementById('status-label').textContent = 'マーカーを探しています...';
         document.getElementById('ar-tip').classList.remove('hidden');

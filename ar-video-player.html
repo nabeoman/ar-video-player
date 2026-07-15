@@ -687,7 +687,10 @@
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false">
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-      <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+      <!-- MindARの生トラッキング値を受けるだけ。表示要素は持たない -->
+      <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
+      <!-- 表示用アンカー（scene直下）。ar-target のワールド変換を追従する -->
+      <a-entity id="stable-anchor" visible="false">
         <!-- 通常用 a-video (初期非表示) -->
         <a-video id="ar-video-el" src="#ar-video" width="1" height="0.5625" position="0 -0.06 0.001" visible="false"></a-video>
         <!-- クロマキー用 a-plane (初期非表示) -->
@@ -855,7 +858,7 @@
       <div class="dc-row">
         <span class="dc-label">MinCF</span>
         <button class="dc-btn" onclick="adjRF('minCF',-0.001)">−</button>
-        <span class="dc-val" id="rf-mincf-val">0.100</span>
+        <span class="dc-val" id="rf-mincf-val">0.001</span>
         <button class="dc-btn" onclick="adjRF('minCF',+0.001)">+</button>
       </div>
       <div class="rf-desc">追従遅延 &nbsp;0.001(遅/滑) ↔ 1.0(速/ブレ) &nbsp;step:0.001</div>
@@ -880,6 +883,39 @@
         <button class="dc-btn" onclick="adjRF('warmup',+1)">+</button>
       </div>
       <div class="rf-desc">検出開始 &nbsp;0(早) ↔ 10(遅) &nbsp;step:1</div>
+
+      <!-- ── 映像安定化 (v3.4.0) ── -->
+      <div class="dc-row" style="margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid rgba(255,255,255,0.12);">
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.75rem;cursor:pointer;flex:1">
+          <input type="checkbox" id="chk-stable" onchange="toggleStable(this.checked)"
+            style="width:15px;height:15px;accent-color:#5c6ef5;cursor:pointer">
+          <span>映像安定化</span>
+        </label>
+      </div>
+      <div class="rf-desc">ONで映像の揺れを抑制（動かすと少し遅れて追従）</div>
+      <div id="stable-ctrl" style="display:none">
+        <div class="dc-row">
+          <span class="dc-label">追従</span>
+          <button class="dc-btn" onclick="adjStable('alpha',-0.02)">−</button>
+          <span class="dc-val" id="stable-alpha-val">0.16</span>
+          <button class="dc-btn" onclick="adjStable('alpha',+0.02)">+</button>
+        </div>
+        <div class="rf-desc">0.05(しっとり) ↔ 0.50(きびきび) &nbsp;step:0.02</div>
+        <div class="dc-row">
+          <span class="dc-label">Freeze</span>
+          <button class="dc-btn" onclick="adjStable('freeze',-50)">−</button>
+          <span class="dc-val" id="stable-freeze-val">250</span>
+          <button class="dc-btn" onclick="adjStable('freeze',+50)">+</button>
+        </div>
+        <div class="rf-desc">ロスト後に姿勢を保持する時間(ms) &nbsp;step:50</div>
+        <div class="dc-row" style="margin-top:0.4rem;gap:0.3rem">
+          <button class="dc-btn" style="flex:1;font-size:0.68rem" onclick="applyStablePreset('snappy')">きびきび</button>
+          <button class="dc-btn" style="flex:1;font-size:0.68rem" onclick="applyStablePreset('normal')">標準</button>
+          <button class="dc-btn" style="flex:1;font-size:0.68rem" onclick="applyStablePreset('smooth')">しっとり</button>
+        </div>
+        <div class="rf-desc">クライアント確認用の3プリセット</div>
+      </div>
+
       <div class="dc-row" style="margin-top:0.45rem;justify-content:space-between;">
         <button id="btn-rf-apply" class="dc-btn" style="flex:1.4;background:rgba(92,110,245,0.35);border-color:rgba(92,110,245,0.6)" onclick="applyRFSettings()">▶ 適用</button>
         <button class="dc-btn" style="flex:1;margin-left:0.4rem;" onclick="saveRFOnlySettings()">保存</button>
@@ -899,7 +935,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v3.3.3 &nbsp;·&nbsp; 2026-07-15</span>
+      <span class="version-badge">v3.4.0 &nbsp;·&nbsp; 2026-07-15</span>
     </div>
 
     <div class="steps-container">
@@ -1093,7 +1129,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v3.3.3</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v3.4.0</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -1124,10 +1160,93 @@
     let _userPaused = false;
     let _currentVideoSrc = null;
     let _cameraStream    = null;
-    let _rfMinCF   = 0.1;
+    // minCF は MindAR 既定値 0.001。以前は 0.1（既定の100倍）で静止時の平滑化がほぼ効かず
+    // 映像がぷるぷるする原因になっていた（v3.4.0で修正）
+    let _rfMinCF   = 0.001;
     let _rfBeta    = 1000;
     let _rfMissTol = 10;
     let _rfWarmTol = 3;
+    // 映像安定化（v3.4.0）
+    let _stableOn     = false;
+    let _stableAlpha  = 0.16;
+    let _stableFreeze = 250;
+
+    /* ══════════════════════════════════════
+       映像安定化アンカー (v3.4.0)
+       ar-target のワールド変換を stable-anchor へ追従コピーする。
+       alpha=1.0 は即時コピー＝従来の直追従と同一挙動。
+    ══════════════════════════════════════ */
+    AFRAME.registerComponent('stable-follow', {
+      schema: {
+        target:   { type: 'selector' },
+        alpha:    { type: 'number', default: 1.0 },
+        freezeMs: { type: 'number', default: 0 }
+      },
+      init: function() {
+        this._found  = false;
+        this._lostAt = 0;
+        this._snap   = true;   // targetFound直後は即時コピー（原点からの滑走を防ぐ）
+        this._p = new THREE.Vector3();
+        this._q = new THREE.Quaternion();
+        this._s = new THREE.Vector3();
+      },
+      setFound: function(found) {
+        if (found) {
+          this._found = true;
+          this._snap  = true;
+        } else {
+          this._found  = false;
+          this._lostAt = performance.now();
+        }
+      },
+      tick: function(time, timeDelta) {
+        const t = this.data.target;
+        const obj = this.el.object3D;
+        if (!t || !t.object3D) return;
+
+        if (!this._found) {
+          if (this._lostAt && (performance.now() - this._lostAt) >= this.data.freezeMs) {
+            if (obj.visible) obj.visible = false;
+          }
+          return;
+        }
+
+        t.object3D.updateWorldMatrix(true, false);
+        t.object3D.matrixWorld.decompose(this._p, this._q, this._s);
+
+        if (this._snap || this.data.alpha >= 1.0) {
+          obj.position.copy(this._p);
+          obj.quaternion.copy(this._q);
+          obj.scale.copy(this._s);
+          this._snap = false;
+        } else {
+          // フレームレート非依存化：60fps基準に正規化する
+          const dt = (timeDelta || 16.67) / 1000;
+          const a  = 1 - Math.pow(1 - this.data.alpha, dt * 60);
+          obj.position.lerp(this._p, a);
+          obj.quaternion.slerp(this._q, a);
+          obj.scale.lerp(this._s, a);
+        }
+        obj.visible = true;
+      }
+    });
+
+    function setAnchorFound(found) {
+      const anchor = document.getElementById('stable-anchor');
+      const comp = anchor && anchor.components && anchor.components['stable-follow'];
+      if (comp) comp.setFound(found);
+    }
+
+    // 安定化設定をアンカーへ反映（起動時・適用時の両方から呼ぶ）
+    function applyStableToAnchor() {
+      const anchor = document.getElementById('stable-anchor');
+      if (!anchor) return;
+      anchor.setAttribute('stable-follow', {
+        target:   '#ar-target',
+        alpha:    _stableOn ? _stableAlpha : 1.0,
+        freezeMs: _stableOn ? _stableFreeze : 0
+      });
+    }
     let _currentZoom     = 1.0;
     let _pinchStartDist  = null;
     let _pinchStartZoom  = 1.0;
@@ -1287,6 +1406,52 @@
       document.getElementById('rf-beta-val').textContent   = _rfBeta;
       document.getElementById('rf-miss-val').textContent   = _rfMissTol;
       document.getElementById('rf-warmup-val').textContent = _rfWarmTol;
+      // 安定化パネル
+      const chk = document.getElementById('chk-stable');
+      if (chk) chk.checked = _stableOn;
+      const ctrl = document.getElementById('stable-ctrl');
+      if (ctrl) ctrl.style.display = _stableOn ? '' : 'none';
+      const av = document.getElementById('stable-alpha-val');
+      if (av) av.textContent = _stableAlpha.toFixed(2);
+      const fv = document.getElementById('stable-freeze-val');
+      if (fv) fv.textContent = _stableFreeze;
+    }
+
+    /* ── 映像安定化のUI操作 (v3.4.0) ── */
+    function toggleStable(on) {
+      _stableOn = !!on;
+      syncRFPanel();
+      applyStableToAnchor();   // AR起動中なら即時反映
+      refreshViewerURL();
+    }
+
+    function adjStable(param, delta) {
+      if (param === 'alpha') {
+        _stableAlpha = Math.round(Math.max(0.05, Math.min(0.50, _stableAlpha + delta)) * 100) / 100;
+      } else if (param === 'freeze') {
+        _stableFreeze = Math.max(0, Math.min(1000, _stableFreeze + delta));
+      }
+      syncRFPanel();
+      applyStableToAnchor();
+      refreshViewerURL();
+    }
+
+    // クライアント確認用プリセット。数値ではなく体感で選んでもらうためのもの
+    function applyStablePreset(name) {
+      const presets = {
+        snappy: { alpha: 0.30, freeze: 150 },  // きびきび：追従優先
+        normal: { alpha: 0.16, freeze: 250 },  // 標準
+        smooth: { alpha: 0.08, freeze: 350 }   // しっとり：安定優先
+      };
+      const p = presets[name];
+      if (!p) return;
+      _stableOn     = true;
+      _stableAlpha  = p.alpha;
+      _stableFreeze = p.freeze;
+      syncRFPanel();
+      applyStableToAnchor();
+      refreshViewerURL();
+      showRFMsg('✓ プリセット: ' + ({snappy:'きびきび', normal:'標準', smooth:'しっとり'})[name]);
     }
 
     function showRFMsg(msg, duration) {
@@ -1306,15 +1471,20 @@
         if (typeof d.beta   === 'number') _rfBeta    = d.beta;
         if (typeof d.miss   === 'number') _rfMissTol = d.miss;
         if (typeof d.warmup === 'number') _rfWarmTol = d.warmup;
+        if (typeof d.stable       === 'boolean') _stableOn     = d.stable;
+        if (typeof d.stableAlpha  === 'number')  _stableAlpha  = d.stableAlpha;
+        if (typeof d.stableFreeze === 'number')  _stableFreeze = d.stableFreeze;
       } catch(e) {}
       syncRFPanel();
     }
 
     function saveRFOnlySettings() {
       localStorage.setItem('ar-rf-settings', JSON.stringify({
-        minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol
+        minCF: _rfMinCF, beta: _rfBeta, miss: _rfMissTol, warmup: _rfWarmTol,
+        stable: _stableOn, stableAlpha: _stableAlpha, stableFreeze: _stableFreeze
       }));
       showRFMsg('✓ 保存しました');
+      refreshViewerURL();
     }
 
     function adjRF(param, delta) {
@@ -1723,6 +1893,7 @@
       target.addEventListener('targetFound', () => {
         _markerVisible = true;
         _userPaused = false;
+        setAnchorFound(true);
         const dot = document.getElementById('pulsedot');
         dot.classList.remove('searching');
         dot.classList.add('found');
@@ -1747,6 +1918,7 @@
       target.addEventListener('targetLost', () => {
         _markerVisible = false;
         _userPaused = false;
+        setAnchorFound(false);
         const dot = document.getElementById('pulsedot');
         dot.classList.remove('found');
         dot.classList.add('searching');
@@ -1876,9 +2048,14 @@
         // パラメータを適用してMindARを設定
         scene.setAttribute('mindar-image', buildMindarAttr());
 
-        // ターゲット内の中身を構築
+        // 表示要素の構築（stable-anchor 配下に1セット固定）
         const avEl = document.getElementById('ar-video-el');
         const planeEl = document.getElementById('ar-ck-plane');
+
+        // 安定化アンカーの設定（OFF時は alpha=1.0 で従来の直追従と同一）
+        applyStableToAnchor();
+        const anchorEl = document.getElementById('stable-anchor');
+        if (anchorEl && anchorEl.object3D) anchorEl.object3D.visible = false;
 
         if (_ytVideoId) {
           if (avEl) avEl.setAttribute('visible', 'false');
@@ -2501,6 +2678,10 @@
       if (avEl) avEl.setAttribute('visible', 'false');
       if (planeEl) planeEl.setAttribute('visible', 'false');
 
+      setAnchorFound(false);
+      const anchorEl2 = document.getElementById('stable-anchor');
+      if (anchorEl2 && anchorEl2.object3D) anchorEl2.object3D.visible = false;
+
       if (_cameraStream) {
         _cameraStream.getTracks().forEach(t => {
           if (t._origStop) t.stop = t._origStop;
@@ -2563,6 +2744,12 @@
         h: hVal.toFixed(4),
         y: yVal.toFixed(4)
       };
+      // 映像安定化（ONのときだけ付与。無指定なら従来の直追従）
+      if (_stableOn) {
+        params.stable = '1';
+        params.stableAlpha = _stableAlpha.toFixed(2);
+        params.stableFreezeMs = _stableFreeze.toString();
+      }
       if (_ckEnabled) {
         params.ck = '1';
         params.ckColor = _ckColorKey;
