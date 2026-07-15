@@ -899,7 +899,7 @@
       </div>
       <h1>AR Video Player</h1>
       <p class="brand-sub">画像にカメラをかざすと映像が流れる<br>ブラウザで動くARプレイヤー</p>
-      <span class="version-badge">v3.1.2 &nbsp;·&nbsp; 2026-07-14</span>
+      <span class="version-badge">v3.2.0 &nbsp;·&nbsp; 2026-07-14</span>
     </div>
 
     <div class="steps-container">
@@ -1093,7 +1093,7 @@
     <img src="./hiro.png"
          style="width:220px;height:220px;image-rendering:pixelated;"
          alt="Hiro Target">
-    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v3.1.2</p>
+    <p style="margin-top:1.5rem;font-size:0.8rem;color:#777;">AR Video Player v3.2.0</p>
   </div>
 
   <!-- PRINT-ONLY: custom target -->
@@ -2669,7 +2669,34 @@
       if (!file) return;
       const btn = document.getElementById('btn-upload-marker');
       btn.disabled = true;
-      await ghUpload('viewer-marker.png', file, 'viewer-marker-status');
+
+      // 1. まず通常のPNGマーカー画像をアップロード
+      const successImg = await ghUpload('viewer-marker.png', file, 'viewer-marker-status');
+
+      // 2. アップロード成功時、その場でコンパイルを行い mindar-target.mind をアップロード
+      if (successImg) {
+        showStatus('viewer-marker-status', '⟳ マーカー認識データを生成・アップロード中...', false, 'rgba(255,255,255,0.5)');
+        try {
+          const imgEl = await loadImageElement(URL.createObjectURL(file));
+          const compiledBuffer = await compileTargetImage(imgEl, () => {});
+
+          if (compiledBuffer) {
+            const mindBlob = new Blob([compiledBuffer], { type: 'application/octet-stream' });
+            const mindFile = new File([mindBlob], 'mindar-target.mind', { type: 'application/octet-stream' });
+
+            const successMind = await ghUpload('mindar-target.mind', mindFile, 'viewer-marker-status');
+            if (successMind) {
+              showStatus('viewer-marker-status', '✓ マーカーと認識データのアップロード完了（反映まで1〜2分）');
+            }
+          } else {
+            showStatus('viewer-marker-status', '⚠ 認識データの生成に失敗しました（空のバッファ）', true);
+          }
+        } catch(e) {
+          console.error('Marker compile/upload failed:', e);
+          showStatus('viewer-marker-status', '⚠ 認識データの生成・アップロードに失敗しました', true);
+        }
+      }
+
       btn.disabled = false;
     }
 
