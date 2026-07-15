@@ -351,7 +351,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.3.2</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.3.3</p>
   </div>
 
   <script>
@@ -685,6 +685,15 @@
       document.getElementById('ar-tip').style.display = 'none';
       document.getElementById('screen-landing').style.display = 'flex';
     }
+
+    // ページ離脱・バックグラウンド化でカメラを解放する
+    // （HUDに終了ボタンがないため、これがカメラ解放の唯一の経路）
+    window.addEventListener('pagehide', () => {
+      if (_cameraStream) stopAR();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden' && _cameraStream) stopAR();
+    });
 
     function setupGUMOverride() {
       if (!_cameraStream) return;
