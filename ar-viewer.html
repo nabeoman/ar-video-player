@@ -362,7 +362,7 @@
     </button>
 
     <p class="https-note">⚠ カメラ機能は HTTPS 環境が必要です</p>
-    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.1.1</p>
+    <p style="font-size:0.7rem;color:rgba(255,255,255,0.2)">v3.1.2</p>
   </div>
 
   <script>
@@ -647,7 +647,7 @@
     function stopAR() {
       // 背景透過を解除
       document.body.classList.remove('ar-active');
-      document.documentElement.remove('ar-active');
+      document.documentElement.classList.remove('ar-active');
 
       stopCKLoop();
       const scene = document.getElementById('main-scene');
